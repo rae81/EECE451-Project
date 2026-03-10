@@ -23,6 +23,9 @@ def test_receive_data_and_stats_flow():
         "cell_id": "37100-81937409",
         "timestamp": "09 Mar 2026 02:30 PM",
         "mac_address": "AA:BB:CC:DD:EE:FF",
+        "latitude": 33.8938,
+        "longitude": 35.5018,
+        "location_accuracy_m": 8.0,
     }
 
     response = client.post("/receive-data", json=payload)
@@ -39,6 +42,14 @@ def test_receive_data_and_stats_flow():
     avg_all_response = client.get("/get-stats/avg-all")
     assert avg_all_response.status_code == 200
     assert avg_all_response.get_json()["unique_devices"] == 1
+
+    history_response = client.get("/api/history", query_string={"device_id": "phone-1"})
+    assert history_response.status_code == 200
+    assert history_response.get_json()["count"] == 1
+
+    heatmap_response = client.get("/api/heatmap-data")
+    assert heatmap_response.status_code == 200
+    assert heatmap_response.get_json()["count"] == 1
 
     with app.app_context():
         assert CellData.query.count() == 1
@@ -100,3 +111,22 @@ def test_date_filtering_works():
     body = stats_response.get_json()
     assert body["record_count"] == 1
     assert body["avg_signal_device"] == -80
+
+
+def test_heatmap_requires_valid_coordinate_pair():
+    client, _app = create_test_client()
+
+    response = client.post(
+        "/receive-data",
+        json={
+            "device_id": "phone-1",
+            "operator": "Alfa",
+            "signal_power": -85,
+            "network_type": "4G",
+            "cell_id": "cell-1",
+            "latitude": 33.9,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "latitude and longitude must be provided together" in response.get_json()["error"]

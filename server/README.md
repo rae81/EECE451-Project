@@ -22,6 +22,11 @@ Clean Flask backend scaffold for the EECE 451 project.
 - `GET /get-stats/avg-all`
 - `GET /central-stats`
 - `GET /device-stats`
+- `GET /api/history`
+- `GET /api/export.csv`
+- `GET /api/handover-stats`
+- `GET /api/heatmap-data`
+- `GET /heatmap`
 
 ## Local setup
 ```bash
@@ -52,3 +57,4 @@ flask --app app seed-demo-data
 - Set `DATABASE_URL` for production or hosted deployment.
 - Set `APP_TIMEZONE` if you want to change the default timezone parsing behavior.
 - Render deploys use an ephemeral filesystem, so hosted persistence should move to PostgreSQL later.
+- Heatmap support is implemented on the server side. The Android app must send `latitude` and `longitude` with readings to make it useful in production.

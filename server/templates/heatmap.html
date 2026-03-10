@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coverage Heatmap</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero-card">
+      <p class="eyebrow">Geo Coverage View</p>
+      <h1>Signal Heatmap</h1>
+      <p class="hero-copy">This page aggregates geo-tagged readings uploaded by the Android app. Stronger color intensity means more samples in the same area.</p>
+    </section>
+
+    <section class="content-card">
+      <div class="section-heading">
+        <h2>Filters</h2>
+        <p>Use the same time and operator filters that the Android app will request.</p>
+      </div>
+      <form id="heatmap-filters" class="filter-form">
+        <label>
+          Start
+          <input type="text" name="start" placeholder="09 Mar 2026 12:00 PM">
+        </label>
+        <label>
+          End
+          <input type="text" name="end" placeholder="09 Mar 2026 03:00 PM">
+        </label>
+        <label>
+          Device
+          <select name="device_id">
+            <option value="">All devices</option>
+            {% for device_id in devices %}
+            <option value="{{ device_id }}">{{ device_id }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Operator
+          <select name="operator">
+            <option value="">All operators</option>
+            {% for operator in operators %}
+            <option value="{{ operator }}">{{ operator }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Network Type
+          <select name="network_type">
+            <option value="">All types</option>
+            <option value="2G">2G</option>
+            <option value="3G">3G</option>
+            <option value="4G">4G</option>
+            <option value="5G">5G</option>
+          </select>
+        </label>
+        <label>
+          Grid Precision
+          <select name="grid_size">
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+        <button type="submit">Refresh Map</button>
+      </form>
+      <div id="heatmap-summary" class="inline-summary">No heatmap data loaded yet.</div>
+      <div id="heatmap-map" class="heatmap-map"></div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <script>
+    const map = L.map('heatmap-map').setView([33.8938, 35.5018], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let heatLayer = L.heatLayer([], { radius: 28, blur: 20, maxZoom: 17 }).addTo(map);
+    let markers = L.layerGroup().addTo(map);
+
+    async function loadHeatmap() {
+      const form = document.getElementById('heatmap-filters');
+      const params = new URLSearchParams(new FormData(form));
+      const response = await fetch(`/api/heatmap-data?${params.toString()}`);
+      const summary = document.getElementById('heatmap-summary');
+
+      if (!response.ok) {
+        const errorBody = await response.json();
+        summary.textContent = errorBody.error || errorBody.message || 'Failed to load heatmap data.';
+        heatLayer.setLatLngs([]);
+        markers.clearLayers();
+        return;
+      }
+
+      const body = await response.json();
+      const points = body.points || [];
+      if (!points.length) {
+        summary.textContent = 'No geo-tagged samples matched the current filters.';
+        heatLayer.setLatLngs([]);
+        markers.clearLayers();
+        return;
+      }
+
+      const heatPoints = points.map(point => [
+        point.latitude,
+        point.longitude,
+        Math.max(point.heat_intensity, 0.2)
+      ]);
+      heatLayer.setLatLngs(heatPoints);
+      markers.clearLayers();
+
+      const bounds = [];
+      points.forEach(point => {
+        bounds.push([point.latitude, point.longitude]);
+        const marker = L.circleMarker([point.latitude, point.longitude], {
+          radius: 6,
+          weight: 1,
+          fillOpacity: 0.65
+        }).bindPopup(`
+          <strong>Samples:</strong> ${point.sample_count}<br>
+          <strong>Avg Signal:</strong> ${point.avg_signal_power} dBm<br>
+          <strong>Operators:</strong> ${point.operators.join(', ')}<br>
+          <strong>Networks:</strong> ${point.network_types.join(', ')}<br>
+          <strong>Latest:</strong> ${point.latest_timestamp}
+        `);
+        markers.addLayer(marker);
+      });
+
+      map.fitBounds(bounds, { padding: [20, 20] });
+      summary.textContent = `Loaded ${body.count} aggregated geo points. Grid precision: ${body.grid_size} decimals.`;
+    }
+
+    document.getElementById('heatmap-filters').addEventListener('submit', event => {
+      event.preventDefault();
+      loadHeatmap();
+    });
+
+    loadHeatmap();
+  </script>
+</body>
+</html>
