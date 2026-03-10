@@ -1,0 +1,17 @@
+import os
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+class Config:
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{BASE_DIR / 'instance' / 'network_cell_analyzer.db'}",
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    JSON_SORT_KEYS = False
+    TIMEZONE = os.getenv("APP_TIMEZONE", "Asia/Beirut")
+    ACTIVE_DEVICE_MINUTES = int(os.getenv("ACTIVE_DEVICE_MINUTES", "5"))
+

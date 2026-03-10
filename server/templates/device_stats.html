@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Device Stats</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero-card">
+      <p class="eyebrow">Per-Device Statistics</p>
+      <h1>{{ device_id }}</h1>
+      <p class="hero-copy">Summary for the selected device based on the stored records and any optional date filters.</p>
+    </section>
+
+    <section class="content-card">
+      <div class="section-heading">
+        <h2>Statistics Summary</h2>
+        <p>{{ sample_count }} samples included in this result.</p>
+      </div>
+      <div class="stats-grid">
+        <article class="stat-box">
+          <span class="stat-title">Average Device Signal</span>
+          <span class="stat-value">{{ stats.avg_signal_device }} dBm</span>
+        </article>
+        <article class="stat-box">
+          <span class="stat-title">First Sample</span>
+          <span class="stat-value small">{{ stats.first_timestamp }}</span>
+        </article>
+        <article class="stat-box">
+          <span class="stat-title">Last Sample</span>
+          <span class="stat-value small">{{ stats.last_timestamp }}</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="section-heading">
+        <h2>Computed Metrics</h2>
+        <p>Percentages and averages required by the course plan.</p>
+      </div>
+      <div class="metrics-columns">
+        <article>
+          <h3>Connectivity Per Operator</h3>
+          <ul class="key-value-list">
+            {% for key, value in stats.connectivity_per_operator.items() %}
+            <li><span>{{ key }}</span><strong>{{ value }}</strong></li>
+            {% endfor %}
+          </ul>
+        </article>
+        <article>
+          <h3>Connectivity Per Network Type</h3>
+          <ul class="key-value-list">
+            {% for key, value in stats.connectivity_per_network_type.items() %}
+            <li><span>{{ key }}</span><strong>{{ value }}</strong></li>
+            {% endfor %}
+          </ul>
+        </article>
+        <article>
+          <h3>Average Signal Per Network Type</h3>
+          <ul class="key-value-list">
+            {% for key, value in stats.avg_signal_per_network_type.items() %}
+            <li><span>{{ key }}</span><strong>{{ value }} dBm</strong></li>
+            {% endfor %}
+          </ul>
+        </article>
+        <article>
+          <h3>Average SNR Per Network Type</h3>
+          <ul class="key-value-list">
+            {% for key, value in stats.avg_snr_per_network_type.items() %}
+            <li><span>{{ key }}</span><strong>{{ value }}</strong></li>
+            {% else %}
+            <li><span>No SNR values available</span><strong>N/A</strong></li>
+            {% endfor %}
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="section-heading">
+        <h2>Recent Samples</h2>
+        <p>Latest records for this device.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Operator</th>
+              <th>Network</th>
+              <th>Signal</th>
+              <th>SNR</th>
+              <th>Band</th>
+              <th>Cell ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in records %}
+            <tr>
+              <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+              <td>{{ record.operator }}</td>
+              <td>{{ record.network_type }}</td>
+              <td>{{ record.signal_power }} dBm</td>
+              <td>{{ record.snr if record.snr is not none else "N/A" }}</td>
+              <td>{{ record.frequency_band or "Unknown" }}</td>
+              <td>{{ record.cell_id }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7">No samples available for this device.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
