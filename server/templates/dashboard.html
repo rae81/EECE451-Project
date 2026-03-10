@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Central Stats</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 </head>
 <body>
   <main class="page-shell">
@@ -20,11 +21,11 @@
           <span class="metric-label">Known Devices</span>
         </article>
         <article>
-          <span class="metric-value">{{ active_devices }}</span>
+          <span class="metric-value" id="active-device-count">{{ active_devices }}</span>
           <span class="metric-label">Active Devices</span>
         </article>
         <article>
-          <span class="metric-value">{{ total_records }}</span>
+          <span class="metric-value" id="record-count">{{ total_records }}</span>
           <span class="metric-label">Stored Records</span>
         </article>
       </div>
@@ -120,5 +121,17 @@
       </div>
     </section>
   </main>
+  <script>
+    const socket = io();
+    socket.on('dashboard_summary', payload => {
+      const records = document.getElementById('record-count');
+      if (records && payload.total_records !== undefined) {
+        records.textContent = payload.total_records;
+      }
+    });
+    socket.on('signal_alert', payload => {
+      console.warn('Signal alert', payload);
+    });
+  </script>
 </body>
 </html>

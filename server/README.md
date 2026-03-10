@@ -22,10 +22,20 @@ Clean Flask backend scaffold for the EECE 451 project.
 - `GET /get-stats/avg-all`
 - `GET /central-stats`
 - `GET /device-stats`
+- `POST /receive-batch`
+- `GET /predict`
 - `GET /api/history`
 - `GET /api/export.csv`
+- `GET /api/report.pdf`
 - `GET /api/handover-stats`
+- `GET /api/neighbor-cells`
 - `GET /api/heatmap-data`
+- `GET /api/speed-test/download`
+- `POST /api/speed-test/upload`
+- `POST /api/speed-test/result`
+- `GET /api/speed-test/stats`
+- `GET /api/alert-rules`
+- `POST /api/alert-rules`
 - `GET /heatmap`
 
 ## Local setup
@@ -58,3 +68,6 @@ flask --app app seed-demo-data
 - Set `APP_TIMEZONE` if you want to change the default timezone parsing behavior.
 - Render deploys use an ephemeral filesystem, so hosted persistence should move to PostgreSQL later.
 - Heatmap support is implemented on the server side. The Android app must send `latitude` and `longitude` with readings to make it useful in production.
+- Dual-SIM-ready fields (`sim_slot`, `subscription_id`) are accepted by the backend.
+- Neighbor-cell payloads are accepted and aggregated by the backend when the Android app sends them.
+- Offline sync is supported server-side through `POST /receive-batch`.
