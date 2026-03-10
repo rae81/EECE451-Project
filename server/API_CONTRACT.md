@@ -33,9 +33,19 @@ Stores a single cell reading and updates device activity.
   "frequency_band": "Band 3 (1800MHz)",
   "timestamp": "09 Mar 2026 02:30 PM",
   "mac_address": "AA:BB:CC:DD:EE:FF",
+  "sim_slot": 1,
+  "subscription_id": "sub-1",
   "latitude": 33.8938,
   "longitude": 35.5018,
-  "location_accuracy_m": 8.0
+  "location_accuracy_m": 8.0,
+  "neighbor_cells": [
+    {
+      "network_type": "4G",
+      "cell_id": "neighbor-1",
+      "signal_power": -88,
+      "is_registered": false
+    }
+  ]
 }
 ```
 
@@ -214,3 +224,45 @@ Returns aggregated geo-tagged points for server-side map rendering.
 ## `GET /heatmap`
 
 Returns the server heatmap HTML page.
+
+## `POST /receive-batch`
+
+Stores a batch of queued readings. This is the server-side support needed for Android offline sync.
+
+### Request shape
+```json
+{
+  "records": [
+    {
+      "device_id": "abc123-def456",
+      "operator": "Alfa",
+      "signal_power": -85,
+      "network_type": "4G",
+      "cell_id": "37100-81937409"
+    }
+  ]
+}
+```
+
+## `GET /predict`
+
+Returns a server-side signal quality prediction based on historical geo-tagged samples.
+
+### Required query parameters
+- `latitude`
+- `longitude`
+- `operator`
+- `network_type`
+
+## Speed test routes
+- `GET /api/speed-test/download`
+- `POST /api/speed-test/upload`
+- `POST /api/speed-test/result`
+- `GET /api/speed-test/stats`
+
+## Alert routes
+- `GET /api/alert-rules`
+- `POST /api/alert-rules`
+
+## Neighbor-cell route
+- `GET /api/neighbor-cells`

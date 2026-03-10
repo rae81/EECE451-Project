@@ -130,3 +130,111 @@ def test_heatmap_requires_valid_coordinate_pair():
 
     assert response.status_code == 400
     assert "latitude and longitude must be provided together" in response.get_json()["error"]
+
+
+def test_batch_ingest_speed_test_and_alert_rules():
+    client, _app = create_test_client()
+
+    batch_response = client.post(
+        "/receive-batch",
+        json={
+            "records": [
+                {
+                    "device_id": "phone-batch",
+                    "operator": "Touch",
+                    "signal_power": -79,
+                    "network_type": "5G",
+                    "cell_id": "cell-5g",
+                    "sim_slot": 1,
+                    "subscription_id": "sub-1",
+                    "latitude": 33.90,
+                    "longitude": 35.48,
+                    "neighbor_cells": [
+                        {
+                            "network_type": "4G",
+                            "cell_id": "neighbor-1",
+                            "signal_power": -88,
+                            "is_registered": False,
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    assert batch_response.status_code == 201
+    assert batch_response.get_json()["stored_count"] == 1
+
+    neighbors_response = client.get("/api/neighbor-cells", query_string={"device_id": "phone-batch"})
+    assert neighbors_response.status_code == 200
+    assert neighbors_response.get_json()["neighbors"][0]["cell_id"] == "neighbor-1"
+
+    upload_probe = client.post("/api/speed-test/upload", data=b"x" * 1024)
+    assert upload_probe.status_code == 200
+    assert upload_probe.get_json()["received_bytes"] == 1024
+
+    save_speed = client.post(
+        "/api/speed-test/result",
+        json={
+            "device_id": "phone-batch",
+            "operator": "Touch",
+            "network_type": "5G",
+            "signal_power": -79,
+            "download_mbps": 55.2,
+            "upload_mbps": 12.4,
+            "latency_ms": 22.0,
+        },
+    )
+    assert save_speed.status_code == 201
+
+    stats_response = client.get("/api/speed-test/stats", query_string={"device_id": "phone-batch"})
+    assert stats_response.status_code == 200
+    assert stats_response.get_json()["avg_download_mbps"] == 55.2
+
+    alert_rule = client.post(
+        "/api/alert-rules",
+        json={"device_id": "phone-batch", "min_signal_power": -90, "trigger_on_network_downgrade": True},
+    )
+    assert alert_rule.status_code == 201
+    listed_rules = client.get("/api/alert-rules", query_string={"device_id": "phone-batch"})
+    assert listed_rules.status_code == 200
+    assert len(listed_rules.get_json()["rules"]) == 1
+
+
+def test_prediction_and_pdf_report_routes():
+    client, _app = create_test_client()
+
+    records = []
+    for index in range(10):
+        records.append(
+            {
+                "device_id": f"predict-{index % 2}",
+                "operator": "Alfa",
+                "signal_power": -80 - index,
+                "network_type": "4G",
+                "cell_id": f"cell-{index}",
+                "latitude": 33.89 + (index * 0.0001),
+                "longitude": 35.50 + (index * 0.0001),
+                "timestamp": f"09 Mar 2026 0{(index % 9) + 1}:00 PM",
+            }
+        )
+
+    batch_response = client.post("/receive-batch", json={"records": records})
+    assert batch_response.status_code == 201
+
+    predict_response = client.get(
+        "/predict",
+        query_string={
+            "latitude": 33.891,
+            "longitude": 35.501,
+            "operator": "Alfa",
+            "network_type": "4G",
+        },
+    )
+    assert predict_response.status_code == 200
+    body = predict_response.get_json()
+    assert "predicted_signal_power" in body
+    assert "confidence" in body
+
+    pdf_response = client.get("/api/report.pdf")
+    assert pdf_response.status_code == 200
+    assert pdf_response.headers["Content-Type"] == "application/pdf"
