@@ -78,6 +78,19 @@ h1 {
   color: var(--muted);
 }
 
+.hero-actions {
+  margin: 14px 0 4px;
+}
+
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+
 .hero-metrics,
 .stats-grid,
 .metrics-columns {
@@ -143,11 +156,13 @@ h1 {
 }
 
 .filter-form input,
-.filter-form button {
+.filter-form button,
+.filter-form select {
   font: inherit;
 }
 
-.filter-form input {
+.filter-form input,
+.filter-form select {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -162,6 +177,19 @@ h1 {
   color: white;
   cursor: pointer;
   align-self: end;
+}
+
+.inline-summary {
+  margin-bottom: 14px;
+  color: var(--muted);
+}
+
+.heatmap-map {
+  width: 100%;
+  min-height: 520px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
 }
 
 .table-wrap {

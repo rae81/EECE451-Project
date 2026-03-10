@@ -1,11 +1,14 @@
+import csv
+import io
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from statistics import mean
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import CORS
 from sqlalchemy import and_
+from sqlalchemy import inspect, text
 
 from config import Config
 from models import CellData, DeviceLog, db
@@ -29,6 +32,7 @@ def create_app(config_object=Config) -> Flask:
     with app.app_context():
         _ensure_instance_dir(app)
         db.create_all()
+        _run_sqlite_migrations()
 
     register_routes(app)
     register_cli(app)
@@ -69,6 +73,9 @@ def register_routes(app: Flask) -> None:
                 network_type=str(payload["network_type"]).strip().upper(),
                 frequency_band=_clean_optional_string(payload.get("frequency_band")),
                 cell_id=str(payload["cell_id"]).strip(),
+                latitude=_optional_float(payload.get("latitude")),
+                longitude=_optional_float(payload.get("longitude")),
+                location_accuracy_m=_optional_float(payload.get("location_accuracy_m")),
                 timestamp=_parse_timestamp(
                     payload.get("timestamp"),
                     app.config["TIMEZONE"],
@@ -174,6 +181,157 @@ def register_routes(app: Flask) -> None:
             end=request.args.get("end", ""),
         )
 
+    @app.get("/api/history")
+    def history():
+        rows = _query_rows(
+            device_id=request.args.get("device_id", "").strip() or None,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            operator=request.args.get("operator"),
+            network_type=request.args.get("network_type"),
+            limit=_parse_limit(request.args.get("limit"), default=100, maximum=1000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        return jsonify(
+            {
+                "records": [row.to_dict() for row in rows],
+                "count": len(rows),
+            }
+        )
+
+    @app.get("/api/export.csv")
+    def export_csv():
+        rows = _query_rows(
+            device_id=request.args.get("device_id", "").strip() or None,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            operator=request.args.get("operator"),
+            network_type=request.args.get("network_type"),
+            require_location=request.args.get("require_location") == "true",
+            limit=_parse_limit(request.args.get("limit"), default=5000, maximum=10000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        buffer = io.StringIO()
+        writer = csv.DictWriter(
+            buffer,
+            fieldnames=[
+                "id",
+                "device_id",
+                "operator",
+                "signal_power",
+                "snr",
+                "network_type",
+                "frequency_band",
+                "cell_id",
+                "latitude",
+                "longitude",
+                "location_accuracy_m",
+                "timestamp",
+            ],
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.to_dict())
+
+        return Response(
+            buffer.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=network-cell-data.csv"},
+        )
+
+    @app.get("/api/handover-stats")
+    def handover_stats():
+        device_id = request.args.get("device_id", "").strip()
+        if not device_id:
+            return jsonify({"error": "device_id is required"}), 400
+
+        rows = _query_rows(
+            device_id=device_id,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            limit=_parse_limit(request.args.get("limit"), default=5000, maximum=10000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        handovers = []
+        ping_pong_count = 0
+        last_key = None
+        previous_key = None
+        for previous, current in zip(rows, rows[1:]):
+            previous_tuple = (previous.network_type, previous.cell_id)
+            current_tuple = (current.network_type, current.cell_id)
+            if previous_tuple != current_tuple:
+                handovers.append(
+                    {
+                        "from_network_type": previous.network_type,
+                        "from_cell_id": previous.cell_id,
+                        "to_network_type": current.network_type,
+                        "to_cell_id": current.cell_id,
+                        "timestamp": current.timestamp.isoformat(),
+                    }
+                )
+                if previous_key is not None and current_tuple == previous_key and previous_tuple == last_key:
+                    ping_pong_count += 1
+                previous_key = last_key
+                last_key = current_tuple
+
+        return jsonify(
+            {
+                "device_id": device_id,
+                "handover_count": len(handovers),
+                "ping_pong_count": ping_pong_count,
+                "events": handovers[-100:],
+            }
+        )
+
+    @app.get("/api/heatmap-data")
+    def heatmap_data():
+        rows = _query_rows(
+            device_id=request.args.get("device_id", "").strip() or None,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            operator=request.args.get("operator"),
+            network_type=request.args.get("network_type"),
+            require_location=True,
+            limit=_parse_limit(request.args.get("limit"), default=5000, maximum=10000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        grid_size = _parse_grid_size(request.args.get("grid_size"))
+        aggregated = _aggregate_heatmap_rows(rows, grid_size)
+
+        return jsonify(
+            {
+                "count": len(aggregated),
+                "grid_size": grid_size,
+                "points": aggregated,
+            }
+        )
+
+    @app.get("/heatmap")
+    def heatmap_page():
+        devices = [device["device_id"] for device in _fetch_devices(app.config["ACTIVE_DEVICE_MINUTES"])]
+        operators = sorted(
+            value[0]
+            for value in db.session.query(CellData.operator).distinct().order_by(CellData.operator.asc()).all()
+            if value[0]
+        )
+        return render_template(
+            "heatmap.html",
+            devices=devices,
+            operators=operators,
+        )
+
 
 def register_cli(app: Flask) -> None:
     @app.cli.command("seed-demo-data")
@@ -223,6 +381,31 @@ def _validate_payload(payload: dict) -> str | None:
     network_type = str(payload["network_type"]).strip().upper()
     if network_type not in {"2G", "3G", "4G", "5G"}:
         return "network_type must be one of: 2G, 3G, 4G, 5G"
+
+    latitude = payload.get("latitude")
+    longitude = payload.get("longitude")
+    if (latitude in (None, "") and longitude not in (None, "")) or (
+        longitude in (None, "") and latitude not in (None, "")
+    ):
+        return "latitude and longitude must be provided together"
+    if latitude not in (None, ""):
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except (TypeError, ValueError):
+            return "latitude and longitude must be numeric when provided"
+        if not -90 <= latitude <= 90:
+            return "latitude must be between -90 and 90"
+        if not -180 <= longitude <= 180:
+            return "longitude must be between -180 and 180"
+
+    if payload.get("location_accuracy_m") not in (None, ""):
+        try:
+            accuracy = float(payload["location_accuracy_m"])
+        except (TypeError, ValueError):
+            return "location_accuracy_m must be numeric when provided"
+        if accuracy < 0:
+            return "location_accuracy_m must be non-negative"
 
     return None
 
@@ -288,17 +471,37 @@ def _upsert_device_log(payload: dict) -> None:
     device.is_active = True
 
 
-def _query_rows(device_id, start, end, timezone_name: str):
-    first_row = (
-        CellData.query.filter_by(device_id=device_id).order_by(CellData.timestamp.asc()).first()
-        if device_id
-        else CellData.query.order_by(CellData.timestamp.asc()).first()
+def _base_query(device_id=None, operator=None, network_type=None, require_location=False):
+    query = CellData.query
+    if device_id:
+        query = query.filter(CellData.device_id == device_id)
+    if operator:
+        query = query.filter(CellData.operator == operator.strip())
+    if network_type:
+        query = query.filter(CellData.network_type == network_type.strip().upper())
+    if require_location:
+        query = query.filter(CellData.latitude.isnot(None), CellData.longitude.isnot(None))
+    return query
+
+
+def _query_rows(
+    device_id,
+    start,
+    end,
+    timezone_name: str,
+    operator=None,
+    network_type=None,
+    require_location=False,
+    limit=None,
+):
+    scoped_query = _base_query(
+        device_id=device_id,
+        operator=operator,
+        network_type=network_type,
+        require_location=require_location,
     )
-    last_row = (
-        CellData.query.filter_by(device_id=device_id).order_by(CellData.timestamp.desc()).first()
-        if device_id
-        else CellData.query.order_by(CellData.timestamp.desc()).first()
-    )
+    first_row = scoped_query.order_by(CellData.timestamp.asc()).first()
+    last_row = scoped_query.order_by(CellData.timestamp.desc()).first()
     if not first_row or not last_row:
         return {"message": "No data found"}, 404
 
@@ -311,13 +514,13 @@ def _query_rows(device_id, start, end, timezone_name: str):
     if end_dt < start_dt:
         return {"error": "end must be after start"}, 400
 
-    filters = [CellData.timestamp >= start_dt, CellData.timestamp <= end_dt]
-    if device_id:
-        filters.append(CellData.device_id == device_id)
-
-    filtered_rows = (
-        CellData.query.filter(and_(*filters)).order_by(CellData.timestamp.asc()).all()
+    query = scoped_query.filter(and_(CellData.timestamp >= start_dt, CellData.timestamp <= end_dt)).order_by(
+        CellData.timestamp.asc()
     )
+    if limit:
+        query = query.limit(limit)
+
+    filtered_rows = query.all()
     if not filtered_rows:
         return {"message": "No data found in the requested time range"}, 404
 
@@ -391,6 +594,71 @@ def _fetch_devices(active_window_minutes: int) -> list[dict]:
     return devices
 
 
+def _parse_limit(raw_value, default: int, maximum: int) -> int:
+    if raw_value in (None, ""):
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(value, maximum))
+
+
+def _parse_grid_size(raw_value) -> int:
+    if raw_value in (None, ""):
+        return 3
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return 3
+    return max(1, min(value, 5))
+
+
+def _aggregate_heatmap_rows(rows: list[CellData], grid_size: int) -> list[dict]:
+    grouped = defaultdict(list)
+    for row in rows:
+        key = (round(row.latitude, grid_size), round(row.longitude, grid_size))
+        grouped[key].append(row)
+
+    aggregated = []
+    for (lat, lon), items in grouped.items():
+        signal_values = [item.signal_power for item in items]
+        snr_values = [item.snr for item in items if item.snr is not None]
+        aggregated.append(
+            {
+                "latitude": lat,
+                "longitude": lon,
+                "sample_count": len(items),
+                "avg_signal_power": round(mean(signal_values), 2),
+                "avg_snr": round(mean(snr_values), 2) if snr_values else None,
+                "operators": sorted({item.operator for item in items}),
+                "network_types": sorted({item.network_type for item in items}),
+                "latest_timestamp": items[-1].timestamp.isoformat(),
+                "heat_intensity": min(1.0, len(items) / 10),
+            }
+        )
+
+    aggregated.sort(key=lambda item: item["sample_count"], reverse=True)
+    return aggregated
+
+
+def _run_sqlite_migrations() -> None:
+    if db.engine.dialect.name != "sqlite":
+        return
+
+    inspector = inspect(db.engine)
+    existing_columns = {column["name"] for column in inspector.get_columns("cell_data")}
+    migrations = {
+        "latitude": "ALTER TABLE cell_data ADD COLUMN latitude FLOAT",
+        "longitude": "ALTER TABLE cell_data ADD COLUMN longitude FLOAT",
+        "location_accuracy_m": "ALTER TABLE cell_data ADD COLUMN location_accuracy_m FLOAT",
+    }
+    for column_name, statement in migrations.items():
+        if column_name not in existing_columns:
+            db.session.execute(text(statement))
+    db.session.commit()
+
+
 def _seed_demo_data() -> None:
     now = datetime.now(timezone.utc)
     sample_rows = [
@@ -402,6 +670,9 @@ def _seed_demo_data() -> None:
             "network_type": "4G",
             "frequency_band": "Band 3 (1800MHz)",
             "cell_id": "37100-81937409",
+            "latitude": 33.8938,
+            "longitude": 35.5018,
+            "location_accuracy_m": 8.0,
             "timestamp": now - timedelta(minutes=12),
             "mac_address": "02:00:00:00:00:01",
         },
@@ -413,6 +684,9 @@ def _seed_demo_data() -> None:
             "network_type": "3G",
             "frequency_band": "Band 1 (2100MHz)",
             "cell_id": "37100-81937000",
+            "latitude": 33.8942,
+            "longitude": 35.5025,
+            "location_accuracy_m": 9.5,
             "timestamp": now - timedelta(minutes=8),
             "mac_address": "02:00:00:00:00:01",
         },
@@ -424,6 +698,9 @@ def _seed_demo_data() -> None:
             "network_type": "4G",
             "frequency_band": "Band 20 (800MHz)",
             "cell_id": "37101-11112222",
+            "latitude": 33.9007,
+            "longitude": 35.4834,
+            "location_accuracy_m": 12.0,
             "timestamp": now - timedelta(minutes=5),
             "mac_address": "02:00:00:00:00:02",
         },
@@ -435,6 +712,9 @@ def _seed_demo_data() -> None:
             "network_type": "2G",
             "frequency_band": "GSM 900",
             "cell_id": "37101-11110000",
+            "latitude": 33.9015,
+            "longitude": 35.484,
+            "location_accuracy_m": 15.0,
             "timestamp": now - timedelta(minutes=2),
             "mac_address": "02:00:00:00:00:02",
         },
@@ -450,6 +730,9 @@ def _seed_demo_data() -> None:
                 network_type=row["network_type"],
                 frequency_band=row["frequency_band"],
                 cell_id=row["cell_id"],
+                latitude=row["latitude"],
+                longitude=row["longitude"],
+                location_accuracy_m=row["location_accuracy_m"],
                 timestamp=row["timestamp"],
             )
         )

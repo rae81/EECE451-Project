@@ -32,7 +32,10 @@ Stores a single cell reading and updates device activity.
   "snr": 12.5,
   "frequency_band": "Band 3 (1800MHz)",
   "timestamp": "09 Mar 2026 02:30 PM",
-  "mac_address": "AA:BB:CC:DD:EE:FF"
+  "mac_address": "AA:BB:CC:DD:EE:FF",
+  "latitude": 33.8938,
+  "longitude": 35.5018,
+  "location_accuracy_m": 8.0
 }
 ```
 
@@ -143,3 +146,71 @@ Simple health check.
   "status": "healthy"
 }
 ```
+
+## `GET /api/history`
+
+Returns recent stored records as JSON.
+
+### Query parameters
+- `device_id` optional
+- `operator` optional
+- `network_type` optional
+- `start` optional
+- `end` optional
+- `limit` optional
+
+## `GET /api/export.csv`
+
+Exports filtered records as CSV.
+
+### Query parameters
+- same as `/api/history`
+- `require_location=true` optional
+
+## `GET /api/handover-stats`
+
+Returns detected cell/network transitions for one device.
+
+### Query parameters
+- `device_id` required
+- `start` optional
+- `end` optional
+- `limit` optional
+
+## `GET /api/heatmap-data`
+
+Returns aggregated geo-tagged points for server-side map rendering.
+
+### Query parameters
+- `device_id` optional
+- `operator` optional
+- `network_type` optional
+- `start` optional
+- `end` optional
+- `grid_size` optional
+- `limit` optional
+
+### Success response
+```json
+{
+  "count": 2,
+  "grid_size": 3,
+  "points": [
+    {
+      "latitude": 33.894,
+      "longitude": 35.502,
+      "sample_count": 4,
+      "avg_signal_power": -83.5,
+      "avg_snr": 14.8,
+      "operators": ["Alfa"],
+      "network_types": ["4G"],
+      "latest_timestamp": "2026-03-09T12:30:00+00:00",
+      "heat_intensity": 0.4
+    }
+  ]
+}
+```
+
+## `GET /heatmap`
+
+Returns the server heatmap HTML page.

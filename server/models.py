@@ -17,6 +17,9 @@ class CellData(db.Model):
     network_type = db.Column(db.String(10), nullable=False, index=True)
     frequency_band = db.Column(db.String(50), nullable=True)
     cell_id = db.Column(db.String(64), nullable=False)
+    latitude = db.Column(db.Float, nullable=True, index=True)
+    longitude = db.Column(db.Float, nullable=True, index=True)
+    location_accuracy_m = db.Column(db.Float, nullable=True)
     timestamp = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -34,6 +37,9 @@ class CellData(db.Model):
             "network_type": self.network_type,
             "frequency_band": self.frequency_band,
             "cell_id": self.cell_id,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "location_accuracy_m": self.location_accuracy_m,
             "timestamp": self.timestamp.isoformat(),
         }
 

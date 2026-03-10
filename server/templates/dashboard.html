@@ -11,6 +11,9 @@
     <section class="hero-card">
       <p class="eyebrow">EECE 451 Server Dashboard</p>
       <h1>Network Cell Analyzer</h1>
+      <div class="hero-actions">
+        <a class="action-link" href="/heatmap">Open Heatmap</a>
+      </div>
       <div class="hero-metrics">
         <article>
           <span class="metric-value">{{ total_devices }}</span>
@@ -85,6 +88,7 @@
               <th>Network</th>
               <th>Signal</th>
               <th>SNR</th>
+              <th>Location</th>
               <th>Cell ID</th>
             </tr>
           </thead>
@@ -97,11 +101,18 @@
               <td>{{ record.network_type }}</td>
               <td>{{ record.signal_power }} dBm</td>
               <td>{{ record.snr if record.snr is not none else "N/A" }}</td>
+              <td>
+                {% if record.latitude is not none and record.longitude is not none %}
+                {{ record.latitude }}, {{ record.longitude }}
+                {% else %}
+                N/A
+                {% endif %}
+              </td>
               <td>{{ record.cell_id }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="7">No samples stored yet.</td>
+              <td colspan="8">No samples stored yet.</td>
             </tr>
             {% endfor %}
           </tbody>
