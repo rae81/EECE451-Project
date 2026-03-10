@@ -124,6 +124,46 @@ h1 {
   margin-bottom: 18px;
 }
 
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 118, 110, 0.05);
+}
+
+.filter-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  min-width: 220px;
+}
+
+.filter-form input,
+.filter-form button {
+  font: inherit;
+}
+
+.filter-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.filter-form button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  align-self: end;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

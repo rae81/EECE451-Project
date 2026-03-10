@@ -24,6 +24,19 @@ class CellData(db.Model):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "device_id": self.device_id,
+            "operator": self.operator,
+            "signal_power": self.signal_power,
+            "snr": self.snr,
+            "network_type": self.network_type,
+            "frequency_band": self.frequency_band,
+            "cell_id": self.cell_id,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
 
 class DeviceLog(db.Model):
     __tablename__ = "device_log"
@@ -44,3 +57,12 @@ class DeviceLog(db.Model):
     )
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
+    def to_dict(self) -> dict:
+        return {
+            "device_id": self.device_id,
+            "ip_address": self.ip_address,
+            "mac_address": self.mac_address,
+            "first_seen": self.first_seen.isoformat(),
+            "last_seen": self.last_seen.isoformat(),
+            "is_active": self.is_active,
+        }

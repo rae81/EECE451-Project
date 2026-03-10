@@ -19,6 +19,18 @@
         <h2>Statistics Summary</h2>
         <p>{{ sample_count }} samples included in this result.</p>
       </div>
+      <form class="filter-form" method="get" action="/device-stats">
+        <input type="hidden" name="device_id" value="{{ device_id }}">
+        <label>
+          Start
+          <input type="text" name="start" value="{{ start }}" placeholder="09 Mar 2026 12:00 PM">
+        </label>
+        <label>
+          End
+          <input type="text" name="end" value="{{ end }}" placeholder="09 Mar 2026 03:00 PM">
+        </label>
+        <button type="submit">Apply Filter</button>
+      </form>
       <div class="stats-grid">
         <article class="stat-box">
           <span class="stat-title">Average Device Signal</span>
@@ -61,6 +73,14 @@
           <h3>Average Signal Per Network Type</h3>
           <ul class="key-value-list">
             {% for key, value in stats.avg_signal_per_network_type.items() %}
+            <li><span>{{ key }}</span><strong>{{ value }} dBm</strong></li>
+            {% endfor %}
+          </ul>
+        </article>
+        <article>
+          <h3>Average Signal Per Device</h3>
+          <ul class="key-value-list">
+            {% for key, value in stats.avg_signal_per_device.items() %}
             <li><span>{{ key }}</span><strong>{{ value }} dBm</strong></li>
             {% endfor %}
           </ul>

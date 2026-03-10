@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
+from sqlalchemy import and_
 
 from config import Config
 from models import CellData, DeviceLog, db
@@ -18,18 +19,19 @@ TIMESTAMP_FORMATS = (
 )
 
 
-def create_app() -> Flask:
+def create_app(config_object=Config) -> Flask:
     app = Flask(__name__)
-    app.config.from_object(Config)
+    app.config.from_object(config_object)
 
     CORS(app, resources={r"/receive-data": {"origins": "*"}, r"/get-stats*": {"origins": "*"}})
     db.init_app(app)
 
     with app.app_context():
-        _ensure_instance_dir()
+        _ensure_instance_dir(app)
         db.create_all()
 
     register_routes(app)
+    register_cli(app)
     return app
 
 
@@ -114,11 +116,18 @@ def register_routes(app: Flask) -> None:
 
         signal_values = [row.signal_power for row in rows]
         snr_values = [row.snr for row in rows if row.snr is not None]
+        signal_per_device = defaultdict(list)
+        for row in rows:
+            signal_per_device[row.device_id].append(row.signal_power)
 
         return jsonify(
             {
                 "avg_signal_all_devices": round(mean(signal_values), 2),
                 "avg_snr_all_devices": round(mean(snr_values), 2) if snr_values else None,
+                "avg_signal_per_device": {
+                    device_id: round(mean(values), 2)
+                    for device_id, values in signal_per_device.items()
+                },
                 "record_count": len(rows),
                 "unique_devices": len({row.device_id for row in rows}),
             }
@@ -160,12 +169,22 @@ def register_routes(app: Flask) -> None:
             device_id=device_id,
             stats=_build_stats_payload(rows),
             sample_count=len(rows),
-            records=rows[-20:],
+            records=rows[-app.config["DEFAULT_PAGE_SAMPLE_LIMIT"] :],
+            start=request.args.get("start", ""),
+            end=request.args.get("end", ""),
         )
 
 
-def _ensure_instance_dir() -> None:
-    instance_dir = Config.SQLALCHEMY_DATABASE_URI.removeprefix("sqlite:///")
+def register_cli(app: Flask) -> None:
+    @app.cli.command("seed-demo-data")
+    def seed_demo_data_command():
+        """Populate the local database with a small, realistic demo dataset."""
+        _seed_demo_data()
+        print("Seeded demo data.")
+
+
+def _ensure_instance_dir(app: Flask) -> None:
+    instance_dir = app.config["SQLALCHEMY_DATABASE_URI"].removeprefix("sqlite:///")
     if instance_dir.endswith(".db"):
         from pathlib import Path
 
@@ -200,6 +219,10 @@ def _validate_payload(payload: dict) -> str | None:
             _parse_timestamp(payload["timestamp"], Config.TIMEZONE)
         except ValueError as exc:
             return str(exc)
+
+    network_type = str(payload["network_type"]).strip().upper()
+    if network_type not in {"2G", "3G", "4G", "5G"}:
+        return "network_type must be one of: 2G, 3G, 4G, 5G"
 
     return None
 
@@ -266,24 +289,35 @@ def _upsert_device_log(payload: dict) -> None:
 
 
 def _query_rows(device_id, start, end, timezone_name: str):
-    query = CellData.query.order_by(CellData.timestamp.asc())
-    if device_id:
-        query = query.filter_by(device_id=device_id)
-
-    rows = query.all()
-    if not rows:
+    first_row = (
+        CellData.query.filter_by(device_id=device_id).order_by(CellData.timestamp.asc()).first()
+        if device_id
+        else CellData.query.order_by(CellData.timestamp.asc()).first()
+    )
+    last_row = (
+        CellData.query.filter_by(device_id=device_id).order_by(CellData.timestamp.desc()).first()
+        if device_id
+        else CellData.query.order_by(CellData.timestamp.desc()).first()
+    )
+    if not first_row or not last_row:
         return {"message": "No data found"}, 404
 
     try:
-        start_dt = _parse_timestamp(start, timezone_name) if start else rows[0].timestamp
-        end_dt = _parse_timestamp(end, timezone_name) if end else rows[-1].timestamp
+        start_dt = _parse_timestamp(start, timezone_name) if start else first_row.timestamp
+        end_dt = _parse_timestamp(end, timezone_name) if end else last_row.timestamp
     except ValueError as exc:
         return {"error": str(exc)}, 400
 
     if end_dt < start_dt:
         return {"error": "end must be after start"}, 400
 
-    filtered_rows = [row for row in rows if start_dt <= row.timestamp <= end_dt]
+    filters = [CellData.timestamp >= start_dt, CellData.timestamp <= end_dt]
+    if device_id:
+        filters.append(CellData.device_id == device_id)
+
+    filtered_rows = (
+        CellData.query.filter(and_(*filters)).order_by(CellData.timestamp.asc()).all()
+    )
     if not filtered_rows:
         return {"message": "No data found in the requested time range"}, 404
 
@@ -296,9 +330,11 @@ def _build_stats_payload(rows: list[CellData]) -> dict:
     network_counts = Counter(row.network_type for row in rows)
     signal_by_network = defaultdict(list)
     snr_by_network = defaultdict(list)
+    signal_by_device = defaultdict(list)
 
     for row in rows:
         signal_by_network[row.network_type].append(row.signal_power)
+        signal_by_device[row.device_id].append(row.signal_power)
         if row.snr is not None:
             snr_by_network[row.network_type].append(row.snr)
 
@@ -314,6 +350,9 @@ def _build_stats_payload(rows: list[CellData]) -> dict:
         },
         "avg_snr_per_network_type": {
             key: round(mean(values), 2) for key, values in snr_by_network.items()
+        },
+        "avg_signal_per_device": {
+            key: round(mean(values), 2) for key, values in signal_by_device.items()
         },
         "avg_signal_device": round(mean([row.signal_power for row in rows]), 2),
         "record_count": total,
@@ -350,6 +389,79 @@ def _fetch_devices(active_window_minutes: int) -> list[dict]:
 
     db.session.commit()
     return devices
+
+
+def _seed_demo_data() -> None:
+    now = datetime.now(timezone.utc)
+    sample_rows = [
+        {
+            "device_id": "demo-phone-01",
+            "operator": "Alfa",
+            "signal_power": -84,
+            "snr": 14.5,
+            "network_type": "4G",
+            "frequency_band": "Band 3 (1800MHz)",
+            "cell_id": "37100-81937409",
+            "timestamp": now - timedelta(minutes=12),
+            "mac_address": "02:00:00:00:00:01",
+        },
+        {
+            "device_id": "demo-phone-01",
+            "operator": "Alfa",
+            "signal_power": -90,
+            "snr": 11.8,
+            "network_type": "3G",
+            "frequency_band": "Band 1 (2100MHz)",
+            "cell_id": "37100-81937000",
+            "timestamp": now - timedelta(minutes=8),
+            "mac_address": "02:00:00:00:00:01",
+        },
+        {
+            "device_id": "demo-phone-02",
+            "operator": "Touch",
+            "signal_power": -78,
+            "snr": 17.1,
+            "network_type": "4G",
+            "frequency_band": "Band 20 (800MHz)",
+            "cell_id": "37101-11112222",
+            "timestamp": now - timedelta(minutes=5),
+            "mac_address": "02:00:00:00:00:02",
+        },
+        {
+            "device_id": "demo-phone-02",
+            "operator": "Touch",
+            "signal_power": -98,
+            "snr": None,
+            "network_type": "2G",
+            "frequency_band": "GSM 900",
+            "cell_id": "37101-11110000",
+            "timestamp": now - timedelta(minutes=2),
+            "mac_address": "02:00:00:00:00:02",
+        },
+    ]
+
+    for row in sample_rows:
+        db.session.add(
+            CellData(
+                device_id=row["device_id"],
+                operator=row["operator"],
+                signal_power=row["signal_power"],
+                snr=row["snr"],
+                network_type=row["network_type"],
+                frequency_band=row["frequency_band"],
+                cell_id=row["cell_id"],
+                timestamp=row["timestamp"],
+            )
+        )
+        device = DeviceLog.query.filter_by(device_id=row["device_id"]).first()
+        if not device:
+            device = DeviceLog(device_id=row["device_id"], first_seen=row["timestamp"])
+            db.session.add(device)
+        device.mac_address = row["mac_address"]
+        device.last_seen = row["timestamp"]
+        device.is_active = True
+
+    db.session.commit()
 
 
 app = create_app()

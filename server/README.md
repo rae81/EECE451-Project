@@ -6,9 +6,12 @@ Clean Flask backend scaffold for the EECE 451 project.
 - `app.py`: Flask app, routes, validation, and stats logic
 - `models.py`: SQLAlchemy models for `CellData` and `DeviceLog`
 - `config.py`: environment-driven configuration
+- `API_CONTRACT.md`: stable contract for the Android integration
 - `templates/`: central dashboard and per-device stats pages
 - `static/style.css`: shared dashboard styling
 - `requirements.txt`: Python dependencies
+- `requirements-dev.txt`: test dependencies
+- `gunicorn.conf.py`: production worker/thread configuration
 - `Procfile` and `render.yaml`: deployment scaffolding
 
 ## Main routes
@@ -29,7 +32,23 @@ pip install -r requirements.txt
 python3 app.py
 ```
 
+## Local testing
+```bash
+cd /home/ramieid/Desktop/451proj/server
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest
+```
+
+## Seed local demo data
+```bash
+cd /home/ramieid/Desktop/451proj/server
+source .venv/bin/activate
+flask --app app seed-demo-data
+```
+
 ## Notes
 - SQLite is the default local database.
 - Set `DATABASE_URL` for production or hosted deployment.
 - Set `APP_TIMEZONE` if you want to change the default timezone parsing behavior.
+- Render deploys use an ephemeral filesystem, so hosted persistence should move to PostgreSQL later.
