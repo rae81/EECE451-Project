@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Central Stats</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero-card">
+      <p class="eyebrow">EECE 451 Server Dashboard</p>
+      <h1>Network Cell Analyzer</h1>
+      <div class="hero-metrics">
+        <article>
+          <span class="metric-value">{{ total_devices }}</span>
+          <span class="metric-label">Known Devices</span>
+        </article>
+        <article>
+          <span class="metric-value">{{ active_devices }}</span>
+          <span class="metric-label">Active Devices</span>
+        </article>
+        <article>
+          <span class="metric-value">{{ total_records }}</span>
+          <span class="metric-label">Stored Records</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="section-heading">
+        <h2>Device Activity</h2>
+        <p>Devices are considered active if they posted data recently.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Device ID</th>
+              <th>IP Address</th>
+              <th>MAC Address</th>
+              <th>First Seen</th>
+              <th>Last Seen</th>
+              <th>Status</th>
+              <th>View</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for device in devices %}
+            <tr>
+              <td>{{ device.device_id }}</td>
+              <td>{{ device.ip_address or "Unknown" }}</td>
+              <td>{{ device.mac_address or "Unknown" }}</td>
+              <td>{{ device.first_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+              <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+              <td>
+                <span class="status-pill {{ 'active' if device.is_active else 'inactive' }}">
+                  {{ 'Active' if device.is_active else 'Idle' }}
+                </span>
+              </td>
+              <td><a href="/device-stats?device_id={{ device.device_id }}">Open</a></td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7">No devices have uploaded data yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="section-heading">
+        <h2>Recent Cell Samples</h2>
+        <p>Most recent records stored by the backend.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Device ID</th>
+              <th>Operator</th>
+              <th>Network</th>
+              <th>Signal</th>
+              <th>SNR</th>
+              <th>Cell ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in recent_records %}
+            <tr>
+              <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+              <td>{{ record.device_id }}</td>
+              <td>{{ record.operator }}</td>
+              <td>{{ record.network_type }}</td>
+              <td>{{ record.signal_power }} dBm</td>
+              <td>{{ record.snr if record.snr is not none else "N/A" }}</td>
+              <td>{{ record.cell_id }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7">No samples stored yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
