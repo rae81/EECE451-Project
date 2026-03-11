@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/dashboardFragment">
+
+    <fragment
+        android:id="@+id/dashboardFragment"
+        android:name="com.networkanalyzer.app.fragments.DashboardFragment"
+        android:label="@string/nav_dashboard">
+        <action
+            android:id="@+id/action_dashboard_to_speedTest"
+            app:destination="@id/speedTestFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/statisticsFragment"
+        android:name="com.networkanalyzer.app.fragments.StatisticsFragment"
+        android:label="@string/nav_statistics" />
+
+    <fragment
+        android:id="@+id/heatmapFragment"
+        android:name="com.networkanalyzer.app.fragments.HeatmapFragment"
+        android:label="@string/nav_heatmap" />
+
+    <fragment
+        android:id="@+id/speedTestFragment"
+        android:name="com.networkanalyzer.app.fragments.SpeedTestFragment"
+        android:label="@string/nav_speed_test" />
+
+    <fragment
+        android:id="@+id/historyFragment"
+        android:name="com.networkanalyzer.app.fragments.HistoryFragment"
+        android:label="@string/nav_history" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.networkanalyzer.app.fragments.SettingsFragment"
+        android:label="@string/nav_settings" />
+</navigation>

@@ -1,0 +1,30 @@
+.claude/
+.pytest_cache/
+.DS_Store
+
+# Local secrets / notes
+repo.txt
+context.txt
+TEMP_CONTEXT.md
+
+# Local reference/archive material not needed in source repo
+ref/
+
+# Python
+__pycache__/
+*.pyc
+server/.venv/
+server/instance/
+
+# Android / Gradle
+android-app/.gradle/
+android-app/**/build/
+android-app/**/.idea/
+android-app/**/local.properties
+android-app/**/secrets.properties
+android-app/**/*.iml
+
+# Frontend
+llmfront/node_modules/
+llmfront/.next/
+llmfront/.env*.local

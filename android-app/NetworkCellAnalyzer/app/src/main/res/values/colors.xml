@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#155E63</color>
+    <color name="colorPrimaryDark">#0B3E42</color>
+    <color name="colorPrimaryLight">#4AA3A3</color>
+    <color name="colorOnPrimary">#F8F7F1</color>
+    <color name="colorPrimaryVariant">#1A7378</color>
+
+    <color name="colorSecondary">#D97757</color>
+    <color name="colorSecondaryDark">#A95034</color>
+    <color name="colorOnSecondary">#FFF8F4</color>
+    <color name="colorSecondaryVariant">#E6996E</color>
+
+    <color name="colorBackground">#F3EEE3</color>
+    <color name="colorSurface">#FFFDF8</color>
+    <color name="colorOnBackground">#1F2A2C</color>
+    <color name="colorOnSurface">#1F2A2C</color>
+    <color name="colorSurfaceVariant">#E6DECF</color>
+
+    <color name="colorError">#B53A2D</color>
+    <color name="colorOnError">#FFF7F3</color>
+
+    <color name="signalExcellent">#1F7A5C</color>
+    <color name="signalGood">#5C9A4B</color>
+    <color name="signalFair">#D28A2D</color>
+    <color name="signalPoor">#C4543D</color>
+    <color name="signalNoSignal">#7D7B75</color>
+
+    <color name="badge2G">#A56A2A</color>
+    <color name="badge3G">#447A55</color>
+    <color name="badge4G">#2D6F84</color>
+    <color name="badge5G">#6B5EA8</color>
+    <color name="badgeUnknown">#6E716E</color>
+    <color name="badgeText">#FFFDF7</color>
+
+    <color name="chartColor1">#155E63</color>
+    <color name="chartColor2">#D97757</color>
+    <color name="chartColor3">#C7A24F</color>
+    <color name="chartColor4">#598A57</color>
+    <color name="chartColor5">#7A69B5</color>
+    <color name="chartColor6">#B9584C</color>
+
+    <color name="splashStart">#10363A</color>
+    <color name="splashEnd">#261F30</color>
+
+    <color name="statusActive">#2D8A68</color>
+    <color name="statusInactive">#B4533D</color>
+    <color name="cardStroke">#D9CFBD</color>
+    <color name="divider">#DCCFBF</color>
+
+    <color name="textPrimary">#1F2A2C</color>
+    <color name="textSecondary">#655E57</color>
+    <color name="textHint">#958C80</color>
+    <color name="textWhite">#FFFFFF</color>
+    <color name="textWhite60">#99FFFFFF</color>
+    <color name="textWhite40">#66FFFFFF</color>
+
+    <color name="heatmapStrong">#1F7A5C</color>
+    <color name="heatmapMedium">#E3B447</color>
+    <color name="heatmapWeak">#C4543D</color>
+
+    <color name="pingPongWarning">#C95D2E</color>
+
+    <color name="heroSurfaceStart">#0F5056</color>
+    <color name="heroSurfaceEnd">#1C283B</color>
+    <color name="heroSurfaceAccent">#D4875F</color>
+    <color name="navSurface">#F9F4E9</color>
+    <color name="navShadow">#1A1C1A</color>
+</resources>

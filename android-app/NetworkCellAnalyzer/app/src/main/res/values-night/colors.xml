@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Brand Colors (lighter for dark backgrounds) -->
+    <color name="colorPrimary">#42A5F5</color>
+    <color name="colorPrimaryDark">#1565C0</color>
+    <color name="colorPrimaryLight">#64B5F6</color>
+    <color name="colorOnPrimary">#000000</color>
+    <color name="colorPrimaryVariant">#1E88E5</color>
+
+    <!-- Secondary / Accent -->
+    <color name="colorSecondary">#26C6DA</color>
+    <color name="colorSecondaryDark">#00ACC1</color>
+    <color name="colorOnSecondary">#000000</color>
+    <color name="colorSecondaryVariant">#00BCD4</color>
+
+    <!-- Background & Surface -->
+    <color name="colorBackground">#121212</color>
+    <color name="colorSurface">#1E1E1E</color>
+    <color name="colorOnBackground">#E0E0E0</color>
+    <color name="colorOnSurface">#E0E0E0</color>
+    <color name="colorSurfaceVariant">#2C2C2C</color>
+
+    <!-- Error -->
+    <color name="colorError">#EF5350</color>
+    <color name="colorOnError">#000000</color>
+
+    <!-- Signal Quality Colors (slightly brighter for dark) -->
+    <color name="signalExcellent">#66BB6A</color>
+    <color name="signalGood">#9CCC65</color>
+    <color name="signalFair">#FFA726</color>
+    <color name="signalPoor">#EF5350</color>
+    <color name="signalNoSignal">#757575</color>
+
+    <!-- Network Type Badge Colors -->
+    <color name="badge2G">#FFA726</color>
+    <color name="badge3G">#66BB6A</color>
+    <color name="badge4G">#42A5F5</color>
+    <color name="badge5G">#AB47BC</color>
+    <color name="badgeUnknown">#616161</color>
+
+    <!-- Badge Text -->
+    <color name="badgeText">#FFFFFF</color>
+
+    <!-- Chart Colors (brighter for dark backgrounds) -->
+    <color name="chartColor1">#42A5F5</color>
+    <color name="chartColor2">#26C6DA</color>
+    <color name="chartColor3">#FFA726</color>
+    <color name="chartColor4">#66BB6A</color>
+    <color name="chartColor5">#AB47BC</color>
+    <color name="chartColor6">#EF5350</color>
+
+    <!-- Splash Gradient -->
+    <color name="splashStart">#0D1117</color>
+    <color name="splashEnd">#161B22</color>
+
+    <!-- Monitoring Status -->
+    <color name="statusActive">#66BB6A</color>
+    <color name="statusInactive">#EF5350</color>
+
+    <!-- Card -->
+    <color name="cardStroke">#333333</color>
+
+    <!-- Divider -->
+    <color name="divider">#333333</color>
+
+    <!-- Text -->
+    <color name="textPrimary">#E0E0E0</color>
+    <color name="textSecondary">#9E9E9E</color>
+    <color name="textHint">#616161</color>
+    <color name="textWhite">#FFFFFF</color>
+    <color name="textWhite60">#99FFFFFF</color>
+    <color name="textWhite40">#66FFFFFF</color>
+
+    <!-- Heatmap -->
+    <color name="heatmapStrong">#66BB6A</color>
+    <color name="heatmapMedium">#FDD835</color>
+    <color name="heatmapWeak">#EF5350</color>
+
+    <!-- Handover Warning -->
+    <color name="pingPongWarning">#FF7043</color>
+</resources>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Central Stats</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="dashboard-shell">
+    <aside class="dashboard-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-lockup">
+          <div class="brand-mark"></div>
+          <div class="brand-copy">
+            <strong>Network Cell Analyzer</strong>
+            <span>Backend command center</span>
+          </div>
+        </div>
+      </div>
+
+      <section class="sidebar-status">
+        <div class="section-kicker">Live Status</div>
+        <h3>Server Overview</h3>
+        <div class="sidebar-status-grid">
+          <article>
+            <span>{{ total_devices }}</span>
+            <small>Known Devices</small>
+          </article>
+          <article>
+            <span id="active-device-count">{{ active_devices }}</span>
+            <small>Active Devices</small>
+          </article>
+          <article>
+            <span id="record-count">{{ total_records }}</span>
+            <small>Stored Records</small>
+          </article>
+        </div>
+      </section>
+
+      <nav class="sidebar-nav">
+        <div class="sidebar-nav-label">Overview</div>
+        <a href="#overview">Mission Control</a>
+        <a href="#analytics">Live Analytics</a>
+        <a href="#distribution">Distribution</a>
+        <a href="#alerts">Alerts and APIs</a>
+
+        <div class="sidebar-nav-label">Data</div>
+        <a href="#devices">Device Fleet</a>
+        <a href="#samples">Recent Samples</a>
+
+        <div class="sidebar-nav-label">External</div>
+        <a href="/heatmap">Heatmap View</a>
+        <a href="/healthz">Health Check</a>
+      </nav>
+
+      <div class="sidebar-actions">
+        <a class="action-link" href="/heatmap">Open Heatmap</a>
+        <a class="action-link secondary" href="/api/export.csv">Export CSV</a>
+        <a class="action-link secondary" href="/api/report.pdf">Export PDF</a>
+      </div>
+    </aside>
+
+    <main class="dashboard-main">
+      <section class="hero-card" id="overview">
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">EECE 451 Server Command Center</p>
+            <h1>Network Cell Analyzer</h1>
+            <p class="hero-copy">Live operations dashboard for authenticated ingest, backend analytics, heatmap aggregation, exports, speed tests, and device-level monitoring across your Android deployment.</p>
+            <p class="hero-meta">This page is the operator-facing summary of the same backend contract the Android app now uses for auth, upload, stats, history, heatmap, exports, and speed tests.</p>
+            <div class="hero-metrics">
+              <article>
+                <span class="metric-value">{{ total_devices }}</span>
+                <span class="metric-label">Known Devices</span>
+              </article>
+              <article>
+                <span class="metric-value" id="hero-active-device-count">{{ active_devices }}</span>
+                <span class="metric-label">Active Devices</span>
+              </article>
+              <article>
+                <span class="metric-value" id="hero-record-count">{{ total_records }}</span>
+                <span class="metric-label">Stored Records</span>
+              </article>
+            </div>
+          </div>
+          <aside class="hero-panel">
+            <h3>Operational Focus</h3>
+            <ul>
+              <li>Monitor ingestion health and live device activity.</li>
+              <li>Spot radio weak zones quickly through geo-tagged sampling.</li>
+              <li>Validate the Android app’s connected flows without leaving the dashboard.</li>
+            </ul>
+          </aside>
+        </div>
+      </section>
+
+      <section class="content-card soft">
+        <div class="section-heading">
+          <div>
+            <div class="section-kicker">Capability Surface</div>
+            <h2>Server Features</h2>
+          </div>
+          <p>Everything the backend currently supports for grading, integration, and extra-credit demonstrations.</p>
+        </div>
+        <div class="feature-pills">
+          <span>Real-time ingest</span>
+          <span>Batch sync</span>
+          <span>Heatmap API</span>
+          <span>Speed test backend</span>
+          <span>Prediction API</span>
+          <span>Handover analysis</span>
+          <span>Neighbor-cell analytics</span>
+          <span>CSV/PDF export</span>
+          <span>Socket.IO push</span>
+          <span>Alert rules</span>
+        </div>
+      </section>
+
+      <section class="content-card" id="analytics">
+        <div class="section-heading">
+          <div>
+            <div class="section-kicker">Live Numbers</div>
+            <h2>Live Analytics</h2>
+          </div>
+          <p>Calculated from recent records and updated by the server.</p>
+        </div>
+        <div class="analytics-grid">
+          <article class="analytics-card">
+            <span class="analytics-label">Average Signal</span>
+            <strong id="avg-signal">--</strong>
+          </article>
+          <article class="analytics-card">
+            <span class="analytics-label">Geo-tagged Samples</span>
+            <strong id="geo-count">--</strong>
+          </article>
+          <article class="analytics-card">
+            <span class="analytics-label">Speed Tests Logged</span>
+            <strong id="speed-count">--</strong>
+          </article>
+          <article class="analytics-card">
+            <span class="analytics-label">Handover Events</span>
+            <strong id="handover-count">--</strong>
+          </article>
+          <article class="analytics-card">
+            <span class="analytics-label">Avg Download</span>
+            <strong id="avg-download">--</strong>
+          </article>
+          <article class="analytics-card">
+            <span class="analytics-label">Recent Alerts</span>
+            <strong id="alert-count">--</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel-grid" id="distribution">
+        <section class="content-card soft">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Fleet Mix</div>
+              <h2>Operator Distribution</h2>
+            </div>
+            <p>Most frequent operators in recent server records.</p>
+          </div>
+          <ul class="key-value-list" id="operator-distribution">
+            <li><span>Loading</span><strong>...</strong></li>
+          </ul>
+        </section>
+
+        <section class="content-card soft">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Radio Access</div>
+              <h2>Network Distribution</h2>
+            </div>
+            <p>Breakdown across 2G / 3G / 4G / 5G observations.</p>
+          </div>
+          <ul class="key-value-list" id="network-distribution">
+            <li><span>Loading</span><strong>...</strong></li>
+          </ul>
+        </section>
+      </section>
+
+      <section class="dashboard-columns" id="alerts">
+        <section class="content-card">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Signals</div>
+              <h2>Recent Alerts</h2>
+            </div>
+            <p>Server-side threshold and downgrade alerts.</p>
+          </div>
+          <ul class="event-list" id="recent-alerts">
+            <li>No alerts emitted yet.</li>
+          </ul>
+        </section>
+
+        <section class="content-card">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Direct Access</div>
+              <h2>Quick API Links</h2>
+            </div>
+            <p>Direct endpoints used by the Android client and grading demo.</p>
+          </div>
+          <div class="quick-links">
+            <a class="quick-link-card" href="/get-stats/avg-all"><strong>Cross-device stats</strong><p>Aggregate radio statistics across all reporting devices.</p></a>
+            <a class="quick-link-card" href="/api/history"><strong>History API</strong><p>Backend-first record stream consumed by the Android history screen.</p></a>
+            <a class="quick-link-card" href="/api/heatmap-data"><strong>Heatmap JSON</strong><p>Server-side spatial aggregation for the coverage view.</p></a>
+            <a class="quick-link-card" href="/api/speed-test/stats"><strong>Speed test stats</strong><p>Backhaul measurement history and averages.</p></a>
+            <a class="quick-link-card" href="/api/neighbor-cells"><strong>Neighbor analytics</strong><p>Companion cell visibility and radio competition context.</p></a>
+            <a class="quick-link-card" href="/api/alert-rules"><strong>Alert rules</strong><p>Threshold-driven monitoring configuration and review.</p></a>
+          </div>
+        </section>
+      </section>
+
+      <section class="content-card" id="devices">
+        <div class="section-heading">
+          <div>
+            <div class="section-kicker">Device Fleet</div>
+            <h2>Device Activity</h2>
+          </div>
+          <p>Devices are considered active if they posted data recently.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Device ID</th>
+                <th>IP Address</th>
+                <th>MAC Address</th>
+                <th>First Seen</th>
+                <th>Last Seen</th>
+                <th>Status</th>
+                <th>View</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for device in devices %}
+              <tr>
+                <td>{{ device.device_id }}</td>
+                <td>{{ device.ip_address or "Unknown" }}</td>
+                <td>{{ device.mac_address or "Unknown" }}</td>
+                <td>{{ device.first_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>
+                  <span class="status-pill {{ 'active' if device.is_active else 'inactive' }}">
+                    {{ 'Active' if device.is_active else 'Idle' }}
+                  </span>
+                </td>
+                <td><a class="pill" href="/device-stats?device_id={{ device.device_id }}">Open</a></td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7">No devices have uploaded data yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="content-card" id="samples">
+        <div class="section-heading">
+          <div>
+            <div class="section-kicker">Latest Ingest</div>
+            <h2>Recent Cell Samples</h2>
+          </div>
+          <p>Most recent records stored by the backend.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Device ID</th>
+                <th>Operator</th>
+                <th>Network</th>
+                <th>Signal</th>
+                <th>SNR</th>
+                <th>SIM</th>
+                <th>Location</th>
+                <th>Cell ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in recent_records %}
+              <tr>
+                <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ record.device_id }}</td>
+                <td>{{ record.operator }}</td>
+                <td>{{ record.network_type }}</td>
+                <td>{{ record.signal_power }} dBm</td>
+                <td>{{ record.snr if record.snr is not none else "N/A" }}</td>
+                <td>{{ record.sim_slot if record.sim_slot is not none else "N/A" }}</td>
+                <td>
+                  {% if record.latitude is not none and record.longitude is not none %}
+                  {{ record.latitude }}, {{ record.longitude }}
+                  {% else %}
+                  N/A
+                  {% endif %}
+                </td>
+                <td>{{ record.cell_id }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="9">No samples stored yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const socket = io();
+
+    function renderList(elementId, data, formatter) {
+      const element = document.getElementById(elementId);
+      if (!element) return;
+      const entries = Object.entries(data || {});
+      if (!entries.length) {
+        element.innerHTML = '<li><span>No data</span><strong>--</strong></li>';
+        return;
+      }
+      element.innerHTML = entries.map(([key, value]) => formatter(key, value)).join('');
+    }
+
+    function renderAlerts(alerts) {
+      const element = document.getElementById('recent-alerts');
+      if (!element) return;
+      if (!alerts || !alerts.length) {
+        element.innerHTML = '<li>No alerts emitted yet.</li>';
+        return;
+      }
+      element.innerHTML = alerts.map(alert => `
+        <li>
+          <strong>${alert.type}</strong>
+          <span>${alert.device_id}: ${alert.message}</span>
+        </li>
+      `).join('');
+    }
+
+    async function loadDashboardSummary() {
+      const response = await fetch('/api/dashboard-summary');
+      if (!response.ok) return;
+      const body = await response.json();
+      const setText = (id, value, suffix = '') => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value === null || value === undefined ? '--' : `${value}${suffix}`;
+      };
+
+      setText('record-count', body.total_records);
+      setText('hero-record-count', body.total_records);
+      setText('geo-count', body.geo_tagged_records);
+      setText('speed-count', body.speed_test_count);
+      setText('handover-count', body.handover_event_count);
+      setText('avg-signal', body.avg_signal_power, body.avg_signal_power !== null ? ' dBm' : '');
+      setText('avg-download', body.avg_download_mbps, body.avg_download_mbps !== null ? ' Mbps' : '');
+      setText('alert-count', body.alert_count);
+      setText('active-device-count', body.active_devices);
+      setText('hero-active-device-count', body.active_devices);
+
+      renderList('operator-distribution', body.operator_distribution, (key, value) => `<li><span>${key}</span><strong>${value}</strong></li>`);
+      renderList('network-distribution', body.network_distribution, (key, value) => `<li><span>${key}</span><strong>${value}</strong></li>`);
+      renderAlerts(body.recent_alerts);
+    }
+
+    socket.on('dashboard_summary', payload => {
+      const records = document.getElementById('record-count');
+      if (records && payload.total_records !== undefined) {
+        records.textContent = payload.total_records;
+      }
+      const heroRecords = document.getElementById('hero-record-count');
+      if (heroRecords && payload.total_records !== undefined) {
+        heroRecords.textContent = payload.total_records;
+      }
+      loadDashboardSummary();
+    });
+
+    socket.on('signal_alert', payload => {
+      loadDashboardSummary();
+      console.warn('Signal alert', payload);
+    });
+
+    loadDashboardSummary();
+    setInterval(loadDashboardSummary, 15000);
+  </script>
+</body>
+</html>
