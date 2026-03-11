@@ -9,6 +9,9 @@ TEMP_CONTEXT.md
 
 # Local reference/archive material not needed in source repo
 ref/
+llmfront/
+EECE451_Project_Plan.html
+VM_PHONE_SETUP.txt
 
 # Python
 __pycache__/
