@@ -12,6 +12,7 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.biometric.BiometricManager;
 
 import com.networkanalyzer.app.databinding.ActivitySplashBinding;
 import com.networkanalyzer.app.utils.PreferenceManager;
@@ -115,7 +116,10 @@ public class SplashActivity extends AppCompatActivity {
                 com.networkanalyzer.app.utils.Constants.PREF_GUEST_MODE, false);
 
         Intent intent;
-        if (isLoggedIn || isGuestMode) {
+        if (shouldRequireBiometricGate(isLoggedIn)) {
+            intent = new Intent(SplashActivity.this, LoginActivity.class);
+            intent.putExtra(LoginActivity.EXTRA_AUTO_PROMPT_BIOMETRIC, true);
+        } else if (isLoggedIn || isGuestMode) {
             intent = new Intent(SplashActivity.this, MainActivity.class);
         } else {
             intent = new Intent(SplashActivity.this, LoginActivity.class);
@@ -127,5 +131,17 @@ public class SplashActivity extends AppCompatActivity {
 
         // Apply a cross-fade transition between activities.
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+    }
+
+    private boolean shouldRequireBiometricGate(boolean isLoggedIn) {
+        if (!isLoggedIn || !preferenceManager.isBiometricEnabled()) {
+            return false;
+        }
+
+        BiometricManager biometricManager = BiometricManager.from(this);
+        int canAuthenticate = biometricManager.canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG
+                        | BiometricManager.Authenticators.BIOMETRIC_WEAK);
+        return canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS;
     }
 }

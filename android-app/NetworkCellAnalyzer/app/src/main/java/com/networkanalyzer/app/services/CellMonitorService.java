@@ -25,12 +25,17 @@ import com.networkanalyzer.app.network.ApiService;
 import com.networkanalyzer.app.network.RetrofitClient;
 import com.networkanalyzer.app.network.models.CellDataRequest;
 import com.networkanalyzer.app.network.models.GenericResponse;
+import com.networkanalyzer.app.utils.AdaptiveMonitoringEngine;
 import com.networkanalyzer.app.utils.Constants;
+import com.networkanalyzer.app.utils.NetworkIdentityHelper;
 import com.networkanalyzer.app.utils.NotificationHelper;
 import com.networkanalyzer.app.utils.PreferenceManager;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -57,13 +62,18 @@ public class CellMonitorService extends Service {
         @Override
         public void run() {
             collectAndDispatch();
-            handler.postDelayed(this, preferenceManager.getCollectionInterval());
+            handler.postDelayed(this, nextIntervalMs);
         }
     };
 
     private PreferenceManager preferenceManager;
     private TelephonyManager telephonyManager;
     private AppDatabase database;
+    private final Deque<Integer> recentSignals = new ArrayDeque<>();
+    private long nextIntervalMs = Constants.DEFAULT_COLLECTION_INTERVAL;
+    private String previousServingKey;
+    private int recentHandovers;
+    private int lastNeighborCount;
 
     @Override
     public void onCreate() {
@@ -136,12 +146,14 @@ public class CellMonitorService extends Service {
                 selected.setOperator(safeOperatorName());
                 selected.setSimSlot(0);
                 populateLocation(selected);
+                List<CellDataRequest.NeighborCellPayload> neighborPayloads = buildNeighborPayloads(allCellInfo);
+                updateAdaptiveState(selected, neighborPayloads);
 
                 CellDataEntity entity = toEntity(selected);
                 long rowId = database.cellDataDao().insert(entity);
                 sendBroadcastUpdate(selected);
                 updateNotification(selected);
-                submitToServer(entity, (int) rowId);
+                submitToServer(entity, neighborPayloads, (int) rowId);
             } catch (SecurityException e) {
                 Log.w(TAG, "Missing permission while collecting cell data", e);
             } catch (Exception e) {
@@ -227,7 +239,9 @@ public class CellMonitorService extends Service {
         }
     }
 
-    private void submitToServer(CellDataEntity entity, int localId) {
+    private void submitToServer(CellDataEntity entity,
+                                List<CellDataRequest.NeighborCellPayload> neighborPayloads,
+                                int localId) {
         ApiService apiService = RetrofitClient.getInstance(this).getApiService();
         CellDataRequest request = new CellDataRequest();
         request.setDeviceId(entity.getDeviceId());
@@ -243,7 +257,10 @@ public class CellMonitorService extends Service {
         request.setLatitude(entity.getLatitude());
         request.setLongitude(entity.getLongitude());
         request.setTimestamp(ISO_FORMAT.format(new Date(entity.getTimestamp())));
+        request.setIpAddress(NetworkIdentityHelper.getBestEffortIpAddress(this));
+        request.setMacAddress(NetworkIdentityHelper.getBestEffortMacAddress(this));
         request.setSimSlot(entity.getSimSlot());
+        request.setNeighborCells(neighborPayloads);
 
         apiService.sendCellData(request).enqueue(new Callback<GenericResponse>() {
             @Override
@@ -258,6 +275,53 @@ public class CellMonitorService extends Service {
                 Log.w(TAG, "Server submission failed; record will sync later", t);
             }
         });
+    }
+
+    private List<CellDataRequest.NeighborCellPayload> buildNeighborPayloads(List<CellInfo> allCellInfo) {
+        List<CellDataRequest.NeighborCellPayload> payloads = new ArrayList<>();
+        for (CellInfo info : allCellInfo) {
+            CellDataEntry entry = CellInfoHelper.parseCellInfo(info);
+            if (entry == null) {
+                continue;
+            }
+            payloads.add(new CellDataRequest.NeighborCellPayload(
+                    entry.getNetworkType(),
+                    entry.getCellId(),
+                    entry.getSignalPower() != CellInfoHelper.UNAVAILABLE ? entry.getSignalPower() : null,
+                    info.isRegistered()
+            ));
+        }
+        return payloads;
+    }
+
+    private void updateAdaptiveState(CellDataEntry selected,
+                                     List<CellDataRequest.NeighborCellPayload> neighborPayloads) {
+        recentSignals.addLast(selected.getSignalPower());
+        while (recentSignals.size() > Constants.PREDICTION_WINDOW_SIZE) {
+            recentSignals.removeFirst();
+        }
+
+        String servingKey = selected.getNetworkType() + "|" + selected.getCellId();
+        if (previousServingKey != null && !previousServingKey.equals(servingKey)) {
+            recentHandovers = Math.min(4, recentHandovers + 1);
+        } else {
+            recentHandovers = Math.max(0, recentHandovers - 1);
+        }
+        previousServingKey = servingKey;
+
+        int neighbors = 0;
+        for (CellDataRequest.NeighborCellPayload payload : neighborPayloads) {
+            if (!payload.isRegistered()) {
+                neighbors++;
+            }
+        }
+        lastNeighborCount = neighbors;
+        nextIntervalMs = AdaptiveMonitoringEngine.chooseIntervalMs(
+                preferenceManager.getCollectionInterval(),
+                recentSignals,
+                recentHandovers,
+                lastNeighborCount
+        );
     }
 
     private int parseInt(String value) {

@@ -56,6 +56,21 @@ public class HeatmapResponse {
         @SerializedName("heat_intensity")
         private double heatIntensity;
 
+        @SerializedName("deadzone_risk")
+        private Double deadzoneRisk;
+
+        @SerializedName("deadzone_label")
+        private String deadzoneLabel;
+
+        @SerializedName("prediction_confidence")
+        private Double predictionConfidence;
+
+        @SerializedName("predicted_signal_power")
+        private Double predictedSignalPower;
+
+        @SerializedName("risk_reasons")
+        private List<String> riskReasons;
+
         public double getLatitude() {
             return latitude;
         }
@@ -90,6 +105,26 @@ public class HeatmapResponse {
 
         public double getHeatIntensity() {
             return heatIntensity;
+        }
+
+        public Double getDeadzoneRisk() {
+            return deadzoneRisk;
+        }
+
+        public String getDeadzoneLabel() {
+            return deadzoneLabel;
+        }
+
+        public Double getPredictionConfidence() {
+            return predictionConfidence;
+        }
+
+        public Double getPredictedSignalPower() {
+            return predictedSignalPower;
+        }
+
+        public List<String> getRiskReasons() {
+            return riskReasons;
         }
     }
 }

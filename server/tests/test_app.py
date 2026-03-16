@@ -125,6 +125,57 @@ def test_date_filtering_works():
     assert body["avg_signal_device"] == -80
 
 
+def test_connectivity_time_is_duration_weighted():
+    client, _app = create_test_client()
+
+    payloads = [
+        {
+            "device_id": "phone-1",
+            "operator": "Alfa",
+            "signal_power": -80,
+            "network_type": "4G",
+            "cell_id": "cell-1",
+            "timestamp": "2026-03-09T13:00:00Z",
+        },
+        {
+            "device_id": "phone-1",
+            "operator": "Alfa",
+            "signal_power": -82,
+            "network_type": "4G",
+            "cell_id": "cell-1",
+            "timestamp": "2026-03-09T13:00:10Z",
+        },
+        {
+            "device_id": "phone-1",
+            "operator": "Touch",
+            "signal_power": -96,
+            "network_type": "3G",
+            "cell_id": "cell-2",
+            "timestamp": "2026-03-09T13:01:50Z",
+        },
+    ]
+
+    for payload in payloads:
+        response = client.post("/receive-data", json=payload)
+        assert response.status_code == 201
+
+    stats_response = client.get(
+        "/get-stats",
+        query_string={
+            "device_id": "phone-1",
+            "from": "2026-03-09T13:00:00Z",
+            "to": "2026-03-09T13:02:00Z",
+        },
+    )
+    assert stats_response.status_code == 200
+    body = stats_response.get_json()
+    assert body["operator_time"]["Alfa"] == 91.67
+    assert body["operator_time"]["Touch"] == 8.33
+    assert body["network_type_time"]["4G"] == 91.67
+    assert body["network_type_time"]["3G"] == 8.33
+    assert body["tracked_duration_seconds"] == 120.0
+
+
 def test_heatmap_requires_valid_coordinate_pair():
     client, _app = create_test_client()
 
@@ -142,6 +193,42 @@ def test_heatmap_requires_valid_coordinate_pair():
 
     assert response.status_code == 400
     assert "latitude and longitude must be provided together" in response.get_json()["error"]
+
+
+def test_device_log_preserves_existing_mac_when_new_payload_omits_it():
+    client, app = create_test_client()
+
+    first_response = client.post(
+        "/receive-data",
+        json={
+            "device_id": "phone-1",
+            "operator": "Alfa",
+            "signal_power": -85,
+            "network_type": "4G",
+            "cell_id": "cell-1",
+            "mac_address": "AA:BB:CC:DD:EE:FF",
+            "timestamp": "2026-03-09T13:00:00Z",
+        },
+    )
+    assert first_response.status_code == 201
+
+    second_response = client.post(
+        "/receive-data",
+        json={
+            "device_id": "phone-1",
+            "operator": "Alfa",
+            "signal_power": -87,
+            "network_type": "4G",
+            "cell_id": "cell-1",
+            "timestamp": "2026-03-09T13:00:10Z",
+        },
+    )
+    assert second_response.status_code == 201
+
+    with app.app_context():
+        device = DeviceLog.query.filter_by(device_id="phone-1").first()
+        assert device is not None
+        assert device.mac_address == "AA:BB:CC:DD:EE:FF"
 
 
 def test_batch_ingest_speed_test_and_alert_rules():
@@ -210,6 +297,85 @@ def test_batch_ingest_speed_test_and_alert_rules():
     listed_rules = client.get("/api/alert-rules", query_string={"device_id": "phone-batch"})
     assert listed_rules.status_code == 200
     assert len(listed_rules.get_json()["rules"]) == 1
+
+
+def test_tower_clusters_and_diagnostics_summary():
+    client, _app = create_test_client()
+
+    payloads = [
+        {
+            "device_id": "tower-device",
+            "operator": "Touch",
+            "signal_power": -82,
+            "snr": 10.0,
+            "network_type": "4G",
+            "cell_id": "tower-a",
+            "frequency_band": "1800",
+            "lac": "11",
+            "latitude": 33.9001,
+            "longitude": 35.5001,
+            "timestamp": "2026-03-11T10:00:00Z",
+        },
+        {
+            "device_id": "tower-device",
+            "operator": "Touch",
+            "signal_power": -84,
+            "snr": 9.0,
+            "network_type": "4G",
+            "cell_id": "tower-a",
+            "frequency_band": "1800",
+            "lac": "11",
+            "latitude": 33.9002,
+            "longitude": 35.5000,
+            "timestamp": "2026-03-11T10:02:00Z",
+        },
+        {
+            "device_id": "tower-device",
+            "operator": "Touch",
+            "signal_power": -103,
+            "snr": 2.0,
+            "network_type": "4G",
+            "cell_id": "tower-b",
+            "frequency_band": "1850",
+            "lac": "12",
+            "latitude": 33.9010,
+            "longitude": 35.5010,
+            "timestamp": "2026-03-11T10:05:00Z",
+        },
+    ]
+
+    for payload in payloads:
+        response = client.post("/receive-data", json=payload)
+        assert response.status_code == 201
+
+    speed_response = client.post(
+        "/api/speed-test/result",
+        json={
+            "device_id": "tower-device",
+            "operator": "Touch",
+            "network_type": "4G",
+            "signal_power": -103,
+            "download_mbps": 4.5,
+            "upload_mbps": 1.2,
+            "latency_ms": 180,
+        },
+    )
+    assert speed_response.status_code == 201
+
+    clusters = client.get("/api/tower-clusters", query_string={"device_id": "tower-device"})
+    assert clusters.status_code == 200
+    cluster_body = clusters.get_json()
+    assert cluster_body["count"] == 2
+    assert cluster_body["clusters"][0]["cell_id"] == "tower-a"
+    assert cluster_body["clusters"][0]["sample_count"] == 2
+
+    diagnostics = client.get("/api/diagnostics-summary", query_string={"device_id": "tower-device"})
+    assert diagnostics.status_code == 200
+    diagnostics_body = diagnostics.get_json()
+    assert diagnostics_body["success"] is True
+    assert diagnostics_body["summary"]["avg_download_mbps"] == 4.5
+    assert diagnostics_body["recommended_interval_seconds"] in {5, 10, 15}
+    assert "issues" in diagnostics_body
 
 
 def test_android_contract_aliases_and_auth_flow():

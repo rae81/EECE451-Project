@@ -19,6 +19,7 @@ from sqlalchemy import inspect, text
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import Config
+from deadzone_model import predict_deadzone
 from models import AlertRule, CellData, DeviceLog, NeighborCellData, SpeedTestResult, User, db
 
 
@@ -161,6 +162,41 @@ def register_routes(app: Flask) -> None:
             return jsonify(prediction[0]), prediction[1]
         return jsonify(prediction)
 
+    @app.post("/predict/batch")
+    def predict_batch():
+        payload = request.get_json(silent=True)
+        if not payload or not isinstance(payload.get("points"), list):
+            return jsonify({"error": "Expected JSON body with a 'points' array"}), 400
+
+        points = payload["points"]
+        if len(points) > 200:
+            return jsonify({"error": "Maximum 200 points per batch request"}), 400
+
+        results = []
+        for pt in points:
+            lat = pt.get("latitude")
+            lng = pt.get("longitude")
+            op = pt.get("operator", "")
+            nt = pt.get("network_type", "")
+            if lat is None or lng is None:
+                results.append({"error": "missing coordinates"})
+                continue
+            prediction = _predict_signal_quality(
+                latitude=lat,
+                longitude=lng,
+                operator=op or "Unknown",
+                network_type=nt or "Unknown",
+                timestamp=None,
+                timezone_name=app.config["TIMEZONE"],
+            )
+            if isinstance(prediction, tuple):
+                results.append({"latitude": lat, "longitude": lng, "error": prediction[0].get("error", "failed")})
+            else:
+                prediction["latitude"] = lat
+                prediction["longitude"] = lng
+                results.append(prediction)
+        return jsonify({"predictions": results, "count": len(results)})
+
     @app.post("/receive-data")
     def receive_data():
         payload = request.get_json(silent=True)
@@ -214,23 +250,30 @@ def register_routes(app: Flask) -> None:
         if not device_id:
             return jsonify({"success": False, "error": "device_id is required"}), 400
 
+        start_raw = _get_time_filter("start", "from")
+        end_raw = _get_time_filter("end", "to")
+
         rows = _query_rows(
             device_id=device_id,
-            start=_get_time_filter("start", "from"),
-            end=_get_time_filter("end", "to"),
+            start=start_raw,
+            end=end_raw,
             timezone_name=app.config["TIMEZONE"],
         )
         if isinstance(rows, tuple):
             return jsonify(rows[0]), rows[1]
 
-        return jsonify(_build_stats_payload(rows)), 200
+        window_start, window_end = _resolve_stats_window(rows, start_raw, end_raw, app.config["TIMEZONE"])
+        previous_rows = _fetch_previous_rows(window_start, device_id=device_id)
+        return jsonify(_build_stats_payload(rows, window_start, window_end, previous_rows)), 200
 
     @app.get("/get-stats/avg-all")
     def get_avg_all():
+        start_raw = _get_time_filter("start", "from")
+        end_raw = _get_time_filter("end", "to")
         rows = _query_rows(
             device_id=None,
-            start=_get_time_filter("start", "from"),
-            end=_get_time_filter("end", "to"),
+            start=start_raw,
+            end=end_raw,
             timezone_name=app.config["TIMEZONE"],
         )
         if isinstance(rows, tuple):
@@ -242,7 +285,9 @@ def register_routes(app: Flask) -> None:
         for row in rows:
             signal_per_device[row.device_id].append(row.signal_power)
 
-        payload = _build_stats_payload(rows)
+        window_start, window_end = _resolve_stats_window(rows, start_raw, end_raw, app.config["TIMEZONE"])
+        previous_rows = _fetch_previous_rows(window_start)
+        payload = _build_stats_payload(rows, window_start, window_end, previous_rows)
         payload.update(
             {
                 "avg_signal_all_devices": round(mean(signal_values), 2),
@@ -331,23 +376,28 @@ def register_routes(app: Flask) -> None:
         if not device_id:
             return jsonify({"error": "device_id is required"}), 400
 
+        start_raw = request.args.get("start")
+        end_raw = request.args.get("end")
         rows = _query_rows(
             device_id=device_id,
-            start=request.args.get("start"),
-            end=request.args.get("end"),
+            start=start_raw,
+            end=end_raw,
             timezone_name=app.config["TIMEZONE"],
         )
         if isinstance(rows, tuple):
             return jsonify(rows[0]), rows[1]
 
+        window_start, window_end = _resolve_stats_window(rows, start_raw, end_raw, app.config["TIMEZONE"])
+        previous_rows = _fetch_previous_rows(window_start, device_id=device_id)
+
         return render_template(
             "device_stats.html",
             device_id=device_id,
-            stats=_build_stats_payload(rows),
+            stats=_build_stats_payload(rows, window_start, window_end, previous_rows),
             sample_count=len(rows),
             records=rows[-app.config["DEFAULT_PAGE_SAMPLE_LIMIT"] :],
-            start=request.args.get("start", ""),
-            end=request.args.get("end", ""),
+            start=start_raw or "",
+            end=end_raw or "",
         )
 
     @app.get("/device/profile")
@@ -529,6 +579,59 @@ def register_routes(app: Flask) -> None:
             }
         )
 
+    @app.get("/api/tower-clusters")
+    def tower_clusters():
+        rows = _query_rows(
+            device_id=request.args.get("device_id", "").strip() or None,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            operator=request.args.get("operator"),
+            network_type=request.args.get("network_type"),
+            require_location=True,
+            limit=_parse_limit(request.args.get("limit"), default=5000, maximum=15000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        clusters = _build_tower_clusters(
+            rows,
+            limit=_parse_limit(request.args.get("cluster_limit"), default=100, maximum=500),
+        )
+        return jsonify(
+            {
+                "count": len(clusters),
+                "clusters": clusters,
+            }
+        )
+
+    @app.get("/api/tower-clusters/detail")
+    def tower_cluster_detail():
+        device_id = request.args.get("device_id", "").strip()
+        cell_id = request.args.get("cell_id", "").strip()
+        network_type = request.args.get("network_type", "").strip().upper()
+        operator = request.args.get("operator", "").strip()
+        if not all((device_id, cell_id, network_type, operator)):
+            return jsonify({"error": "device_id, cell_id, network_type, and operator are required"}), 400
+
+        rows = _query_rows(
+            device_id=device_id,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            operator=operator,
+            network_type=network_type,
+            require_location=True,
+            limit=_parse_limit(request.args.get("limit"), default=5000, maximum=15000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        cluster_rows = [row for row in rows if (row.cell_id or "") == cell_id]
+        if not cluster_rows:
+            return jsonify({"error": "tower cluster not found"}), 404
+        return jsonify(_build_tower_cluster_detail(cluster_rows))
+
     @app.get("/api/neighbor-cells")
     def neighbor_cells():
         query = (
@@ -680,6 +783,66 @@ def register_routes(app: Flask) -> None:
                 },
             }
         )
+
+    @app.get("/api/diagnostics-summary")
+    def diagnostics_summary():
+        device_id = request.args.get("device_id", "").strip()
+        if not device_id:
+            return jsonify({"error": "device_id is required"}), 400
+
+        rows = _query_rows(
+            device_id=device_id,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            limit=_parse_limit(request.args.get("limit"), default=1500, maximum=5000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        speed_rows = (
+            SpeedTestResult.query.filter(SpeedTestResult.device_id == device_id)
+            .order_by(SpeedTestResult.timestamp.desc())
+            .limit(25)
+            .all()
+        )
+        neighbor_rows = (
+            db.session.query(
+                NeighborCellData.cell_id,
+                NeighborCellData.network_type,
+                db.func.avg(NeighborCellData.signal_power),
+                db.func.count(NeighborCellData.id),
+            )
+            .join(CellData, NeighborCellData.cell_data_id == CellData.id)
+            .filter(CellData.device_id == device_id)
+            .group_by(NeighborCellData.cell_id, NeighborCellData.network_type)
+            .all()
+        )
+        return jsonify(_build_diagnostics_summary(device_id, rows, speed_rows, neighbor_rows))
+
+    @app.get("/api/diagnostics-history")
+    def diagnostics_history():
+        device_id = request.args.get("device_id", "").strip()
+        if not device_id:
+            return jsonify({"error": "device_id is required"}), 400
+
+        rows = _query_rows(
+            device_id=device_id,
+            start=request.args.get("start"),
+            end=request.args.get("end"),
+            timezone_name=app.config["TIMEZONE"],
+            limit=_parse_limit(request.args.get("limit"), default=2000, maximum=8000),
+        )
+        if isinstance(rows, tuple):
+            return jsonify(rows[0]), rows[1]
+
+        speed_rows = (
+            SpeedTestResult.query.filter(SpeedTestResult.device_id == device_id)
+            .order_by(SpeedTestResult.timestamp.asc())
+            .limit(120)
+            .all()
+        )
+        return jsonify(_build_diagnostics_history(device_id, rows, speed_rows))
 
     @app.get("/api/report.pdf")
     def export_pdf_report():
@@ -842,6 +1005,19 @@ def _parse_timestamp(value, timezone_name: str) -> datetime:
     raise ValueError("timestamp format is invalid")
 
 
+def _resolve_stats_window(
+    rows: list[CellData],
+    start,
+    end,
+    timezone_name: str,
+) -> tuple[datetime, datetime]:
+    first_timestamp = _as_utc(rows[0].timestamp)
+    last_timestamp = _as_utc(rows[-1].timestamp)
+    start_dt = _parse_timestamp(start, timezone_name) if start else first_timestamp
+    end_dt = _parse_timestamp(end, timezone_name) if end else last_timestamp
+    return start_dt, end_dt
+
+
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -956,7 +1132,9 @@ def _upsert_device_log(payload: dict) -> None:
         db.session.add(device)
 
     device.ip_address = client_ip or payload.get("ip_address")
-    device.mac_address = _clean_optional_string(payload.get("mac_address"))
+    incoming_mac = _clean_optional_string(payload.get("mac_address"))
+    if incoming_mac:
+        device.mac_address = incoming_mac
     device.last_seen = now
     device.is_active = True
 
@@ -1085,13 +1263,97 @@ def _query_rows(
     return filtered_rows
 
 
-def _build_stats_payload(rows: list[CellData]) -> dict:
+def _fetch_previous_rows(
+    start_dt: datetime,
+    device_id=None,
+    operator=None,
+    network_type=None,
+    require_location=False,
+) -> dict[str, CellData]:
+    query = _base_query(
+        device_id=device_id,
+        operator=operator,
+        network_type=network_type,
+        require_location=require_location,
+    ).filter(CellData.timestamp < start_dt)
+
+    previous_rows: dict[str, CellData] = {}
+    if device_id:
+        row = query.order_by(CellData.timestamp.desc()).first()
+        if row:
+            row.timestamp = _as_utc(row.timestamp)
+            previous_rows[row.device_id] = row
+        return previous_rows
+
+    for row in query.order_by(CellData.device_id.asc(), CellData.timestamp.desc()).all():
+        if row.device_id in previous_rows:
+            continue
+        row.timestamp = _as_utc(row.timestamp)
+        previous_rows[row.device_id] = row
+    return previous_rows
+
+
+def _accumulate_connectivity_time(
+    device_rows: list[CellData],
+    window_start: datetime,
+    window_end: datetime,
+    previous_row: CellData | None,
+    operator_durations: defaultdict[str, float],
+    network_durations: defaultdict[str, float],
+) -> float:
+    if not device_rows:
+        return 0.0
+
+    state_row = previous_row or device_rows[0]
+    current_start = window_start
+    total_seconds = 0.0
+
+    transition_rows = device_rows if previous_row else device_rows[1:]
+    for row in transition_rows:
+        transition_at = min(_as_utc(row.timestamp), window_end)
+        if transition_at <= current_start:
+            state_row = row
+            current_start = max(current_start, _as_utc(row.timestamp))
+            continue
+
+        duration_seconds = (transition_at - current_start).total_seconds()
+        operator_durations[state_row.operator] += duration_seconds
+        network_durations[state_row.network_type] += duration_seconds
+        total_seconds += duration_seconds
+
+        state_row = row
+        current_start = max(window_start, _as_utc(row.timestamp))
+
+    if window_end > current_start:
+        duration_seconds = (window_end - current_start).total_seconds()
+        operator_durations[state_row.operator] += duration_seconds
+        network_durations[state_row.network_type] += duration_seconds
+        total_seconds += duration_seconds
+
+    if total_seconds <= 0:
+        operator_durations[state_row.operator] += 1.0
+        network_durations[state_row.network_type] += 1.0
+        return 1.0
+
+    return total_seconds
+
+
+def _format_percentage(value: float, total: float) -> str:
+    return f"{round((value / total) * 100, 2)}%"
+
+
+def _build_stats_payload(
+    rows: list[CellData],
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
+    previous_rows: dict[str, CellData] | None = None,
+) -> dict:
     total = len(rows)
-    operator_counts = Counter(row.operator for row in rows)
-    network_counts = Counter(row.network_type for row in rows)
     signal_by_network = defaultdict(list)
     snr_by_network = defaultdict(list)
     signal_by_device = defaultdict(list)
+    operator_durations: defaultdict[str, float] = defaultdict(float)
+    network_durations: defaultdict[str, float] = defaultdict(float)
 
     for row in rows:
         signal_by_network[row.network_type].append(row.signal_power)
@@ -1099,11 +1361,35 @@ def _build_stats_payload(rows: list[CellData]) -> dict:
         if row.snr is not None:
             snr_by_network[row.network_type].append(row.snr)
 
+    grouped_rows: dict[str, list[CellData]] = defaultdict(list)
+    for row in rows:
+        grouped_rows[row.device_id].append(row)
+
+    explicit_start = window_start is not None
+    explicit_end = window_end is not None
+    total_tracked_seconds = 0.0
+    for device_id, device_rows in grouped_rows.items():
+        device_rows.sort(key=lambda row: _as_utc(row.timestamp))
+        device_window_start = window_start if explicit_start else _as_utc(device_rows[0].timestamp)
+        device_window_end = window_end if explicit_end else _as_utc(device_rows[-1].timestamp)
+        total_tracked_seconds += _accumulate_connectivity_time(
+            device_rows,
+            device_window_start,
+            device_window_end,
+            (previous_rows or {}).get(device_id),
+            operator_durations,
+            network_durations,
+        )
+
     operator_percentages = {
-        key: round((value / total) * 100, 2) for key, value in operator_counts.items()
+        key: round((value / total_tracked_seconds) * 100, 2)
+        for key, value in operator_durations.items()
+        if total_tracked_seconds > 0
     }
     network_percentages = {
-        key: round((value / total) * 100, 2) for key, value in network_counts.items()
+        key: round((value / total_tracked_seconds) * 100, 2)
+        for key, value in network_durations.items()
+        if total_tracked_seconds > 0
     }
     avg_signal_per_type = {
         key: round(mean(values), 2) for key, values in signal_by_network.items()
@@ -1116,14 +1402,20 @@ def _build_stats_payload(rows: list[CellData]) -> dict:
     }
     first_timestamp = rows[0].timestamp.isoformat()
     last_timestamp = rows[-1].timestamp.isoformat()
+    effective_start = window_start or _as_utc(rows[0].timestamp)
+    effective_end = window_end or _as_utc(rows[-1].timestamp)
 
     return {
         "success": True,
         "connectivity_per_operator": {
-            key: _percentage(value, total) for key, value in operator_counts.items()
+            key: _format_percentage(value, total_tracked_seconds)
+            for key, value in operator_durations.items()
+            if total_tracked_seconds > 0
         },
         "connectivity_per_network_type": {
-            key: _percentage(value, total) for key, value in network_counts.items()
+            key: _format_percentage(value, total_tracked_seconds)
+            for key, value in network_durations.items()
+            if total_tracked_seconds > 0
         },
         "avg_signal_per_network_type": avg_signal_per_type,
         "avg_snr_per_network_type": avg_snr_per_type,
@@ -1132,18 +1424,15 @@ def _build_stats_payload(rows: list[CellData]) -> dict:
         "record_count": total,
         "first_timestamp": first_timestamp,
         "last_timestamp": last_timestamp,
+        "tracked_duration_seconds": round(total_tracked_seconds, 2),
         "operator_time": operator_percentages,
         "network_type_time": network_percentages,
         "avg_signal_per_type": avg_signal_per_type,
         "avg_snr_per_type": avg_snr_per_type,
         "total_records": total,
-        "from_date": first_timestamp[:10],
-        "to_date": last_timestamp[:10],
+        "from_date": effective_start.date().isoformat(),
+        "to_date": effective_end.date().isoformat(),
     }
-
-
-def _percentage(count: int, total: int) -> str:
-    return f"{round((count / total) * 100, 2)}%"
 
 
 def _fetch_devices(active_window_minutes: int) -> list[dict]:
@@ -1226,7 +1515,324 @@ def _aggregate_heatmap_rows(rows: list[CellData], grid_size: int, max_points: in
         )
 
     aggregated.sort(key=lambda item: item["sample_count"], reverse=True)
-    return aggregated[:max_points]
+    limited = aggregated[:max_points]
+    model_path = current_app.config.get("DEADZONE_MODEL_PATH")
+    for point in limited:
+        dominant_operator = Counter(item.operator for item in grouped[(point["latitude"], point["longitude"])]).most_common(1)[0][0]
+        dominant_network = Counter(item.network_type for item in grouped[(point["latitude"], point["longitude"])]).most_common(1)[0][0]
+        prediction = predict_deadzone(
+            model_path,
+            latitude=point["latitude"],
+            longitude=point["longitude"],
+            operator=dominant_operator,
+            network_type=dominant_network,
+        )
+        if prediction:
+            point["deadzone_risk"] = prediction["deadzone_risk"]
+            point["deadzone_label"] = prediction["deadzone_label"]
+            point["prediction_confidence"] = prediction["confidence"]
+            point["predicted_signal_power"] = prediction["predicted_signal_power"]
+            point["risk_reasons"] = prediction["reasons"]
+    return limited
+
+
+def _build_tower_clusters(rows: list[CellData], limit: int) -> list[dict]:
+    grouped = defaultdict(list)
+    for row in rows:
+        key = (
+            row.cell_id or "unknown",
+            row.network_type or "Unknown",
+            row.operator or "Unknown",
+        )
+        grouped[key].append(row)
+
+    clusters = []
+    for (cell_id, network_type, operator), items in grouped.items():
+        lats = [item.latitude for item in items if item.latitude is not None]
+        lngs = [item.longitude for item in items if item.longitude is not None]
+        if not lats or not lngs:
+            continue
+        centroid_lat = round(mean(lats), 6)
+        centroid_lng = round(mean(lngs), 6)
+        signal_values = [item.signal_power for item in items]
+        snr_values = [item.snr for item in items if item.snr is not None]
+        channels = sorted({item.frequency_band for item in items if item.frequency_band})
+        lacs = sorted({item.lac for item in items if item.lac})
+        radius_m = _estimate_cluster_radius_m(centroid_lat, centroid_lng, items)
+        first_seen = min(item.timestamp for item in items)
+        last_seen = max(item.timestamp for item in items)
+        clusters.append(
+            {
+                "cell_id": cell_id,
+                "network_type": network_type,
+                "operator": operator,
+                "latitude": centroid_lat,
+                "longitude": centroid_lng,
+                "sample_count": len(items),
+                "avg_signal_power": round(mean(signal_values), 2),
+                "avg_snr": round(mean(snr_values), 2) if snr_values else None,
+                "channels": channels,
+                "lacs": lacs,
+                "first_seen": first_seen.isoformat(),
+                "last_seen": last_seen.isoformat(),
+                "estimated_radius_m": radius_m,
+                "dominance_ratio": round(len(items) / max(1, len(rows)), 4),
+            }
+        )
+
+    clusters.sort(key=lambda item: item["sample_count"], reverse=True)
+    return clusters[:limit]
+
+
+def _build_tower_cluster_detail(rows: list[CellData]) -> dict:
+    rows = sorted(rows, key=lambda row: row.timestamp)
+    centroid_lat = round(mean([row.latitude for row in rows if row.latitude is not None]), 6)
+    centroid_lng = round(mean([row.longitude for row in rows if row.longitude is not None]), 6)
+    signal_values = [row.signal_power for row in rows]
+    snr_values = [row.snr for row in rows if row.snr is not None]
+    channels = Counter(row.frequency_band for row in rows if row.frequency_band)
+    lacs = Counter(row.lac for row in rows if row.lac)
+    top_hours = Counter(_as_utc(row.timestamp).hour for row in rows)
+    return {
+        "cell_id": rows[0].cell_id,
+        "network_type": rows[0].network_type,
+        "operator": rows[0].operator,
+        "latitude": centroid_lat,
+        "longitude": centroid_lng,
+        "sample_count": len(rows),
+        "avg_signal_power": round(mean(signal_values), 2),
+        "avg_snr": round(mean(snr_values), 2) if snr_values else None,
+        "estimated_radius_m": _estimate_cluster_radius_m(centroid_lat, centroid_lng, rows),
+        "first_seen": rows[0].timestamp.isoformat(),
+        "last_seen": rows[-1].timestamp.isoformat(),
+        "channels": [{"channel": key, "seen_count": value} for key, value in channels.most_common()],
+        "lacs": [{"lac": key, "seen_count": value} for key, value in lacs.most_common()],
+        "top_hours": [{"hour": key, "seen_count": value} for key, value in top_hours.most_common()],
+        "recent_samples": [
+            {
+                "timestamp": row.timestamp.isoformat(),
+                "signal_power": row.signal_power,
+                "snr": row.snr,
+                "latitude": row.latitude,
+                "longitude": row.longitude,
+                "frequency_band": row.frequency_band,
+                "lac": row.lac,
+            }
+            for row in rows[-20:]
+        ],
+    }
+
+
+def _estimate_cluster_radius_m(centroid_lat: float, centroid_lng: float, rows: list[CellData]) -> float:
+    if len(rows) <= 1:
+        return 0.0
+    distances = []
+    for row in rows:
+        if row.latitude is None or row.longitude is None:
+            continue
+        distances.append(_geo_distance_km(centroid_lat, centroid_lng, row.latitude, row.longitude) * 1000.0)
+    if not distances:
+        return 0.0
+    return round(max(distances), 1)
+
+
+def _build_diagnostics_summary(device_id: str, rows: list[CellData], speed_rows: list[SpeedTestResult], neighbor_rows) -> dict:
+    recent_rows = rows[-200:] if len(rows) > 200 else rows
+    signal_values = [row.signal_power for row in recent_rows]
+    snr_values = [row.snr for row in recent_rows if row.snr is not None]
+    avg_signal = round(mean(signal_values), 2) if signal_values else None
+    avg_snr = round(mean(snr_values), 2) if snr_values else None
+
+    handovers = 0
+    ping_pong = 0
+    previous_key = None
+    last_key = None
+    for previous, current in zip(recent_rows, recent_rows[1:]):
+        previous_tuple = (previous.network_type, previous.cell_id)
+        current_tuple = (current.network_type, current.cell_id)
+        if previous_tuple != current_tuple:
+            handovers += 1
+            if previous_key is not None and current_tuple == previous_key and previous_tuple == last_key:
+                ping_pong += 1
+            previous_key = last_key
+            last_key = current_tuple
+
+    handover_rate = round((handovers / max(1, len(recent_rows))) * 100, 2)
+    avg_download = round(mean([row.download_mbps for row in speed_rows]), 2) if speed_rows else None
+    avg_upload = round(mean([row.upload_mbps for row in speed_rows]), 2) if speed_rows else None
+    latency_values = [row.latency_ms for row in speed_rows if row.latency_ms is not None]
+    avg_latency = round(mean(latency_values), 2) if latency_values else None
+    neighbor_count = len(neighbor_rows)
+    top_neighbor_seen = max((row[3] for row in neighbor_rows), default=0)
+
+    issues = []
+    if avg_signal is not None and avg_signal <= -100:
+        issues.append(
+            _diagnostic_issue(
+                "weak_coverage",
+                "Weak coverage",
+                "high" if avg_signal <= -108 else "medium",
+                f"Average serving-cell power is {avg_signal} dBm.",
+                "Increase sampling density in this area and compare neighboring cells for a stronger candidate."
+            )
+        )
+    if avg_snr is not None and avg_snr <= 4:
+        issues.append(
+            _diagnostic_issue(
+                "radio_noise",
+                "Possible interference / noisy radio",
+                "high" if avg_snr <= 1 else "medium",
+                f"Average quality metric is {avg_snr} dB.",
+                "Compare quality against signal strength; if power is acceptable but quality stays low, interference is likely."
+            )
+        )
+    if avg_latency is not None and avg_download is not None and avg_latency >= 120 and avg_download <= 8:
+        issues.append(
+            _diagnostic_issue(
+                "congestion",
+                "Likely congestion or backhaul bottleneck",
+                "high" if avg_latency >= 180 else "medium",
+                f"Average latency is {avg_latency} ms with {avg_download} Mbps download.",
+                "Run repeated speed tests at the same spot and compare across time windows to confirm load-related degradation."
+            )
+        )
+    if handover_rate >= 8 or ping_pong >= 2:
+        issues.append(
+            _diagnostic_issue(
+                "handover_instability",
+                "Unstable handovers",
+                "high" if ping_pong >= 3 else "medium",
+                f"{handovers} handovers detected in the recent window, ping-pong count {ping_pong}.",
+                "Prioritize route logging here and inspect recurring transitions between the same cells."
+            )
+        )
+    if avg_signal is not None and avg_signal <= -95 and neighbor_count <= 1:
+        issues.append(
+            _diagnostic_issue(
+                "indoor_attenuation",
+                "Likely indoor attenuation",
+                "low",
+                "Weak signal combined with very little neighboring-cell visibility.",
+                "Compare the same serving cell outdoors or near windows to distinguish building loss from general coverage weakness."
+            )
+        )
+    if avg_signal is not None and avg_signal <= -96 and handovers >= 1:
+        issues.append(
+            _diagnostic_issue(
+                "edge_of_cell",
+                "Likely edge-of-cell condition",
+                "medium",
+                "Weak signal and active serving-cell changes suggest border coverage.",
+                "Map this corridor and compare adjacent recurring cells to identify the handover boundary."
+            )
+        )
+
+    issue_weight = sum({"low": 8, "medium": 16, "high": 24}[issue["severity"]] for issue in issues)
+    signal_component = 0 if avg_signal is None else max(0, min(100, int((avg_signal + 120) * 2)))
+    snr_component = 50 if avg_snr is None else max(0, min(100, int((avg_snr + 5) * 5)))
+    speed_component = 55 if avg_download is None else max(0, min(100, int(avg_download * 2)))
+    latency_component = 50 if avg_latency is None else max(0, min(100, int(120 - min(avg_latency, 120))))
+    reliability_score = max(
+        5,
+        min(
+            100,
+            int(round(signal_component * 0.3 + snr_component * 0.2 + speed_component * 0.25 + latency_component * 0.15 + max(0, 100 - handover_rate * 4) * 0.1 - issue_weight * 0.35)),
+        ),
+    )
+
+    if reliability_score >= 85:
+        recommendation = {"interval_seconds": 15, "mode": "stable", "label": "Stable route"}
+    elif reliability_score >= 65:
+        recommendation = {"interval_seconds": 10, "mode": "watch", "label": "Watch area"}
+    else:
+        recommendation = {"interval_seconds": 5, "mode": "investigate", "label": "Investigate aggressively"}
+
+    dominant_cells = Counter((row.network_type, row.cell_id) for row in recent_rows)
+    top_cells = [
+        {
+            "network_type": key[0],
+            "cell_id": key[1],
+            "seen_count": value,
+        }
+        for key, value in dominant_cells.most_common(3)
+    ]
+
+    return {
+        "success": True,
+        "device_id": device_id,
+        "reliability_score": reliability_score,
+        "reliability_label": _label_for_reliability(reliability_score),
+        "recommended_interval_seconds": recommendation["interval_seconds"],
+        "adaptive_mode": recommendation["mode"],
+        "adaptive_label": recommendation["label"],
+        "issues": issues,
+        "summary": {
+            "avg_signal_power": avg_signal,
+            "avg_snr": avg_snr,
+            "avg_download_mbps": avg_download,
+            "avg_upload_mbps": avg_upload,
+            "avg_latency_ms": avg_latency,
+            "handover_count": handovers,
+            "handover_rate_per_100": handover_rate,
+            "ping_pong_count": ping_pong,
+            "neighbor_cluster_count": neighbor_count,
+            "top_neighbor_seen_count": top_neighbor_seen,
+            "top_cells": top_cells,
+        },
+    }
+
+
+def _build_diagnostics_history(device_id: str, rows: list[CellData], speed_rows: list[SpeedTestResult]) -> dict:
+    if not rows:
+        return {"success": True, "device_id": device_id, "history": []}
+
+    bucket_size = max(20, len(rows) // 8)
+    history = []
+    for index in range(0, len(rows), bucket_size):
+        bucket = rows[index:index + bucket_size]
+        if not bucket:
+            continue
+        bucket_start = _as_utc(bucket[0].timestamp)
+        bucket_end = _as_utc(bucket[-1].timestamp)
+        bucket_speeds = [
+            row for row in speed_rows
+            if row.timestamp and bucket_start <= _as_utc(row.timestamp) <= bucket_end
+        ]
+        summary = _build_diagnostics_summary(device_id, bucket, bucket_speeds, [])
+        primary_issue = summary["issues"][0]["title"] if summary["issues"] else "No major issue"
+        history.append(
+            {
+                "from_timestamp": bucket_start.isoformat(),
+                "to_timestamp": bucket_end.isoformat(),
+                "reliability_score": summary["reliability_score"],
+                "reliability_label": summary["reliability_label"],
+                "primary_issue": primary_issue,
+                "issue_count": len(summary["issues"]),
+            }
+        )
+    return {"success": True, "device_id": device_id, "history": history}
+
+
+def _diagnostic_issue(code: str, title: str, severity: str, evidence: str, suggestion: str) -> dict:
+    return {
+        "code": code,
+        "title": title,
+        "severity": severity,
+        "evidence": evidence,
+        "suggestion": suggestion,
+    }
+
+
+def _label_for_reliability(score: int) -> str:
+    if score >= 85:
+        return "Field-ready"
+    if score >= 70:
+        return "Stable"
+    if score >= 55:
+        return "Usable"
+    if score >= 40:
+        return "Fragile"
+    return "Risky"
 
 
 def _store_speed_test_payload(payload: dict, timezone_name: str) -> tuple[dict, int]:
@@ -1255,6 +1861,22 @@ def _store_speed_test_payload(payload: dict, timezone_name: str) -> tuple[dict, 
 
 
 def _predict_signal_quality(latitude, longitude, operator, network_type, timestamp, timezone_name: str):
+    model_prediction = predict_deadzone(
+        current_app.config.get("DEADZONE_MODEL_PATH"),
+        latitude=float(latitude),
+        longitude=float(longitude),
+        operator=operator.strip(),
+        network_type=network_type.strip().upper(),
+    )
+    if model_prediction:
+        model_prediction["requested_timestamp"] = (
+            _parse_timestamp(timestamp, timezone_name).isoformat() if timestamp else datetime.now(timezone.utc).isoformat()
+        )
+        return model_prediction
+    return _predict_signal_quality_from_local_rows(latitude, longitude, operator, network_type, timestamp, timezone_name)
+
+
+def _predict_signal_quality_from_local_rows(latitude, longitude, operator, network_type, timestamp, timezone_name: str):
     training_rows = (
         CellData.query.filter(
             CellData.latitude.isnot(None),
@@ -1300,9 +1922,13 @@ def _predict_signal_quality(latitude, longitude, operator, network_type, timesta
     return {
         "predicted_signal_power": round(prediction, 2),
         "predicted_quality": quality,
+        "deadzone_risk": round(1.0 - confidence, 2),
+        "deadzone_label": "high" if quality == "weak" else "moderate" if quality == "fair" else "low",
         "confidence": round(confidence, 2),
         "training_sample_count": len(training_rows),
         "nearest_sample_count": len(nearest_rows),
+        "reasons": ["fallback heuristic used because no trained dead-zone model is loaded"],
+        "model_source": "local-heuristic",
     }
 
 

@@ -11,17 +11,23 @@
         <action
             android:id="@+id/action_dashboard_to_speedTest"
             app:destination="@id/speedTestFragment" />
+        <action
+            android:id="@+id/action_dashboard_to_towerClusters"
+            app:destination="@id/towerClustersFragment" />
+        <action
+            android:id="@+id/action_dashboard_to_diagnostics"
+            app:destination="@id/diagnosticsFragment" />
     </fragment>
 
     <fragment
         android:id="@+id/statisticsFragment"
         android:name="com.networkanalyzer.app.fragments.StatisticsFragment"
-        android:label="@string/nav_statistics" />
+        android:label="@string/nav_analytics" />
 
     <fragment
         android:id="@+id/heatmapFragment"
         android:name="com.networkanalyzer.app.fragments.HeatmapFragment"
-        android:label="@string/nav_heatmap" />
+        android:label="@string/nav_map" />
 
     <fragment
         android:id="@+id/speedTestFragment"
@@ -32,6 +38,25 @@
         android:id="@+id/historyFragment"
         android:name="com.networkanalyzer.app.fragments.HistoryFragment"
         android:label="@string/nav_history" />
+
+    <fragment
+        android:id="@+id/towerClustersFragment"
+        android:name="com.networkanalyzer.app.fragments.TowerClustersFragment"
+        android:label="@string/nav_tower_clusters">
+        <action
+            android:id="@+id/action_towerClusters_to_detail"
+            app:destination="@id/towerClusterDetailFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/towerClusterDetailFragment"
+        android:name="com.networkanalyzer.app.fragments.TowerClusterDetailFragment"
+        android:label="@string/nav_tower_clusters" />
+
+    <fragment
+        android:id="@+id/diagnosticsFragment"
+        android:name="com.networkanalyzer.app.fragments.DiagnosticsFragment"
+        android:label="@string/nav_diagnostics" />
 
     <fragment
         android:id="@+id/settingsFragment"

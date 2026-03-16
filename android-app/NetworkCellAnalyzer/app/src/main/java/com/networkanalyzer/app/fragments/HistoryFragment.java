@@ -20,15 +20,17 @@ import com.networkanalyzer.app.databinding.FragmentHistoryBinding;
 import com.networkanalyzer.app.network.ApiService;
 import com.networkanalyzer.app.network.RetrofitClient;
 import com.networkanalyzer.app.network.models.HistoryResponse;
+import com.networkanalyzer.app.utils.Constants;
 import com.networkanalyzer.app.utils.ExportHelper;
 import com.networkanalyzer.app.utils.PreferenceManager;
 
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
@@ -46,11 +48,22 @@ public class HistoryFragment extends Fragment {
             new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
     };
 
+    private enum FilterMode {
+        ALL,
+        UNSYNCED,
+        G2,
+        G3,
+        G4,
+        G5
+    }
+
     private FragmentHistoryBinding binding;
     private HistoryAdapter adapter;
     private PreferenceManager preferenceManager;
     private ApiService apiService;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private List<CellDataEntity> allItems = new ArrayList<>();
+    private FilterMode filterMode = FilterMode.ALL;
 
     static {
         for (SimpleDateFormat format : SERVER_TIMESTAMP_FORMATS) {
@@ -76,6 +89,7 @@ public class HistoryFragment extends Fragment {
         binding.recyclerHistoryEntries.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recyclerHistoryEntries.setAdapter(adapter);
 
+        setupFilters();
         binding.btnExportCsv.setOnClickListener(v -> exportCsv());
         binding.btnExportPdf.setOnClickListener(v -> exportPdf());
 
@@ -94,38 +108,139 @@ public class HistoryFragment extends Fragment {
         super.onDestroy();
     }
 
+    private void setupFilters() {
+        binding.chipHistoryAll.setOnClickListener(v -> {
+            filterMode = FilterMode.ALL;
+            applyFilter();
+        });
+        binding.chipHistoryUnsynced.setOnClickListener(v -> {
+            filterMode = FilterMode.UNSYNCED;
+            applyFilter();
+        });
+        binding.chipHistory2g.setOnClickListener(v -> {
+            filterMode = FilterMode.G2;
+            applyFilter();
+        });
+        binding.chipHistory3g.setOnClickListener(v -> {
+            filterMode = FilterMode.G3;
+            applyFilter();
+        });
+        binding.chipHistory4g.setOnClickListener(v -> {
+            filterMode = FilterMode.G4;
+            applyFilter();
+        });
+        binding.chipHistory5g.setOnClickListener(v -> {
+            filterMode = FilterMode.G5;
+            applyFilter();
+        });
+    }
+
     private void loadHistory() {
         binding.progressBar.setVisibility(View.VISIBLE);
         executor.execute(() -> {
             List<CellDataEntity> items = fetchServerHistory();
+            boolean usedServer = items != null;
             if (items == null) {
                 items = AppDatabase.getInstance(requireContext()).cellDataDao().getAll();
             }
-            List<CellDataEntity> finalItems = items;
-            requireActivity().runOnUiThread(() -> updateHistoryUi(finalItems));
+            allItems = items;
+            boolean finalUsedServer = usedServer;
+            requireActivity().runOnUiThread(() -> {
+                if (binding == null) {
+                    return;
+                }
+                binding.tvExportStatus.setText(finalUsedServer
+                        ? getString(R.string.history_server_export_ready)
+                        : "Offline/local field log active. Exports will use local storage.");
+                applyFilter();
+            });
         });
     }
 
+    private void applyFilter() {
+        if (binding == null) {
+            return;
+        }
+        List<CellDataEntity> filtered = new ArrayList<>();
+        for (CellDataEntity item : allItems) {
+            if (matchesFilter(item)) {
+                filtered.add(item);
+            }
+        }
+        updateHistoryUi(filtered);
+        updateSummary(filtered);
+    }
+
+    private boolean matchesFilter(@NonNull CellDataEntity item) {
+        switch (filterMode) {
+            case UNSYNCED:
+                return !item.isSynced();
+            case G2:
+                return Constants.NETWORK_2G.equals(item.getNetworkType());
+            case G3:
+                return Constants.NETWORK_3G.equals(item.getNetworkType());
+            case G4:
+                return Constants.NETWORK_4G.equals(item.getNetworkType());
+            case G5:
+                return Constants.NETWORK_5G.equals(item.getNetworkType());
+            default:
+                return true;
+        }
+    }
+
+    private void updateSummary(@NonNull List<CellDataEntity> items) {
+        LinkedHashSet<String> cellIds = new LinkedHashSet<>();
+        LinkedHashSet<String> operators = new LinkedHashSet<>();
+        int syncedCount = 0;
+        for (CellDataEntity item : items) {
+            if (item.getCellId() != null && !item.getCellId().isEmpty()) {
+                cellIds.add(item.getCellId());
+            }
+            if (item.getOperator() != null && !item.getOperator().isEmpty()) {
+                operators.add(item.getOperator());
+            }
+            if (item.isSynced()) {
+                syncedCount++;
+            }
+        }
+        int syncPercent = items.isEmpty() ? 0 : Math.round((syncedCount * 100f) / items.size());
+        binding.tvSummaryRecords.setText(String.valueOf(items.size()));
+        binding.tvSummaryCells.setText(String.valueOf(cellIds.size()));
+        binding.tvSummaryOperators.setText(String.valueOf(operators.size()));
+        binding.tvSummarySync.setText(syncPercent + "%");
+    }
+
     private void exportCsv() {
+        updateExportUi(true, getString(R.string.history_exporting_csv));
         executor.execute(() -> {
             Uri result = downloadServerExport(true);
             if (result == null) {
-                List<CellDataEntity> items = AppDatabase.getInstance(requireContext()).cellDataDao().getAll();
-                result = ExportHelper.exportToCsv(requireContext(), items, "cell-data-history");
+                result = ExportHelper.exportToCsv(requireContext(), applyFilterCopy(), "cell-data-history");
             }
-            showExportToast(result, R.string.settings_export_csv);
+            handleExportResult(result, "text/csv", getString(R.string.history_export_format_csv));
         });
     }
 
     private void exportPdf() {
+        updateExportUi(true, getString(R.string.history_exporting_pdf));
         executor.execute(() -> {
             Uri result = downloadServerExport(false);
             if (result == null) {
-                List<CellDataEntity> items = AppDatabase.getInstance(requireContext()).cellDataDao().getAll();
-                result = ExportHelper.exportToPdf(requireContext(), items, "cell-data-report");
+                result = ExportHelper.exportToPdf(requireContext(), applyFilterCopy(), "cell-data-report");
             }
-            showExportToast(result, R.string.settings_export_pdf);
+            handleExportResult(result, "application/pdf", getString(R.string.history_export_format_pdf));
         });
+    }
+
+    @NonNull
+    private List<CellDataEntity> applyFilterCopy() {
+        List<CellDataEntity> filtered = new ArrayList<>();
+        for (CellDataEntity item : allItems) {
+            if (matchesFilter(item)) {
+                filtered.add(item);
+            }
+        }
+        return filtered;
     }
 
     private void updateHistoryUi(List<CellDataEntity> items) {
@@ -213,11 +328,49 @@ public class HistoryFragment extends Fragment {
         return System.currentTimeMillis();
     }
 
-    private void showExportToast(Uri result, int labelRes) {
-        requireActivity().runOnUiThread(() -> Toast.makeText(
-                requireContext(),
-                result != null ? getString(labelRes) + " complete" : "Export failed",
-                Toast.LENGTH_SHORT
-        ).show());
+    private void updateExportUi(boolean busy, @NonNull String statusText) {
+        if (getActivity() == null) {
+            return;
+        }
+        requireActivity().runOnUiThread(() -> {
+            if (binding == null) {
+                return;
+            }
+            binding.btnExportCsv.setEnabled(!busy);
+            binding.btnExportPdf.setEnabled(!busy);
+            binding.tvExportStatus.setText(statusText);
+        });
+    }
+
+    private void handleExportResult(@Nullable Uri result, @NonNull String mimeType, @NonNull String formatLabel) {
+        if (getActivity() == null) {
+            return;
+        }
+        requireActivity().runOnUiThread(() -> {
+            if (binding == null) {
+                return;
+            }
+            binding.btnExportCsv.setEnabled(true);
+            binding.btnExportPdf.setEnabled(true);
+            if (result == null) {
+                binding.tvExportStatus.setText(R.string.history_export_failed);
+                Toast.makeText(requireContext(), R.string.history_export_failed, Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            boolean surfaced = ExportHelper.openFile(requireContext(), result, mimeType);
+            binding.tvExportStatus.setText(
+                    surfaced
+                            ? getString(R.string.history_export_opened, formatLabel)
+                            : getString(R.string.history_export_saved, formatLabel)
+            );
+            Toast.makeText(
+                    requireContext(),
+                    surfaced
+                            ? getString(R.string.history_export_opened, formatLabel)
+                            : getString(R.string.history_export_saved, formatLabel),
+                    Toast.LENGTH_SHORT
+            ).show();
+        });
     }
 }

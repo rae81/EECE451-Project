@@ -6,5 +6,5 @@
         android:centerColor="@color/heatmapMedium"
         android:endColor="@color/heatmapWeak"
         android:angle="0" />
-    <corners android:radius="4dp" />
+    <corners android:radius="99dp" />
 </shape>

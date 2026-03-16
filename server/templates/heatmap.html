@@ -33,7 +33,7 @@
         </div>
         <aside class="hero-panel">
           <h3>Map Intent</h3>
-          <p>Use this view to validate that the Android client’s uploaded GPS-linked measurements are landing in the backend correctly.</p>
+          <p>Use this view to validate that the Android client's uploaded GPS-linked measurements are landing in the backend correctly.</p>
         </aside>
       </div>
     </section>
@@ -94,7 +94,7 @@
         <button type="submit">Refresh Map</button>
       </form>
 
-      <div class="summary-grid" style="margin-bottom: 16px;">
+      <div class="summary-grid" style="margin-bottom: 14px;">
         <article class="summary-card">
           <span>Aggregated Points</span>
           <strong id="heatmap-point-count">--</strong>
@@ -147,12 +147,13 @@
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
   <script>
     const map = L.map('heatmap-map').setView([33.8938, 35.5018], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      subdomains: 'abcd'
     }).addTo(map);
 
-    let heatLayer = L.heatLayer([], { radius: 28, blur: 20, maxZoom: 17 }).addTo(map);
+    let heatLayer = L.heatLayer([], { radius: 28, blur: 20, maxZoom: 17, gradient: {0.2: '#DC2626', 0.4: '#F97316', 0.6: '#EAB308', 0.8: '#65A30D', 1.0: '#059669'} }).addTo(map);
     let markers = L.layerGroup().addTo(map);
     const markerCap = 250;
 

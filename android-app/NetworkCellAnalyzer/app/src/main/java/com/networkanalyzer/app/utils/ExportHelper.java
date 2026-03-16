@@ -1,5 +1,6 @@
 package com.networkanalyzer.app.utils;
 
+import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -458,6 +459,32 @@ public final class ExportHelper {
         Intent chooser = Intent.createChooser(shareIntent, "Share Report");
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         context.startActivity(chooser);
+    }
+
+    public static boolean openFile(Context context, Uri fileUri, String mimeType) {
+        if (fileUri == null) {
+            Log.w(TAG, "Cannot open: file URI is null.");
+            return false;
+        }
+
+        Intent viewIntent = new Intent(Intent.ACTION_VIEW);
+        viewIntent.setDataAndType(fileUri, mimeType);
+        viewIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        viewIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        try {
+            context.startActivity(viewIntent);
+            return true;
+        } catch (ActivityNotFoundException viewError) {
+            Log.w(TAG, "No activity available to open exported file, falling back to share sheet.", viewError);
+            try {
+                shareFile(context, fileUri, mimeType);
+                return true;
+            } catch (Exception shareError) {
+                Log.e(TAG, "Unable to surface exported file.", shareError);
+                return false;
+            }
+        }
     }
 
     // =========================================================================

@@ -48,6 +48,7 @@ import retrofit2.Response;
 public class LoginActivity extends AppCompatActivity {
 
     private static final String TAG = "LoginActivity";
+    public static final String EXTRA_AUTO_PROMPT_BIOMETRIC = "auto_prompt_biometric";
 
     /** Minimum acceptable password length. */
     private static final int MIN_PASSWORD_LENGTH = 6;
@@ -61,6 +62,8 @@ public class LoginActivity extends AppCompatActivity {
 
     /** {@code true} while an API call is in-flight; prevents duplicate submissions. */
     private boolean isLoading = false;
+    private boolean shouldAutoPromptBiometric = false;
+    private boolean biometricPromptShown = false;
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -75,10 +78,12 @@ public class LoginActivity extends AppCompatActivity {
 
         preferenceManager = new PreferenceManager(this);
         apiService = RetrofitClient.getInstance(this).getApiService();
+        shouldAutoPromptBiometric = getIntent().getBooleanExtra(EXTRA_AUTO_PROMPT_BIOMETRIC, false);
 
         setupUI();
         setupListeners();
         checkBiometricAvailability();
+        maybeAutoPromptBiometric();
     }
 
     @Override
@@ -425,10 +430,19 @@ public class LoginActivity extends AppCompatActivity {
      * @return {@code true} if biometric login can be offered.
      */
     private boolean isBiometricAvailable() {
-        if (!preferenceManager.isBiometricEnabled()) {
+        if (!preferenceManager.isBiometricEnabled() || !hasStoredSession()) {
             return false;
         }
 
+        return canAuthenticateWithBiometrics();
+    }
+
+    private boolean hasStoredSession() {
+        String authToken = preferenceManager.getAuthToken();
+        return authToken != null && !authToken.isEmpty();
+    }
+
+    private boolean canAuthenticateWithBiometrics() {
         BiometricManager biometricManager = BiometricManager.from(this);
         int canAuthenticate = biometricManager.canAuthenticate(
                 BiometricManager.Authenticators.BIOMETRIC_STRONG
@@ -446,11 +460,28 @@ public class LoginActivity extends AppCompatActivity {
                 isBiometricAvailable() ? View.VISIBLE : View.GONE);
     }
 
+    private void maybeAutoPromptBiometric() {
+        if (!shouldAutoPromptBiometric || biometricPromptShown || isRegisterMode || !isBiometricAvailable()) {
+            return;
+        }
+        biometricPromptShown = true;
+        binding.getRoot().post(this::showBiometricPrompt);
+    }
+
     /**
      * Displays the system biometric prompt. On successful authentication the
      * stored token is used to skip password entry entirely.
      */
     private void showBiometricPrompt() {
+        if (!canAuthenticateWithBiometrics()) {
+            showError(getString(R.string.error_biometric_unavailable));
+            return;
+        }
+        if (!hasStoredSession()) {
+            showError(getString(R.string.error_biometric_no_session));
+            return;
+        }
+
         Executor executor = ContextCompat.getMainExecutor(this);
 
         BiometricPrompt biometricPrompt = new BiometricPrompt(this, executor,
@@ -497,8 +528,7 @@ public class LoginActivity extends AppCompatActivity {
      * the token is still present and navigates forward.
      */
     private void handleBiometricSuccess() {
-        String token = preferenceManager.getAuthToken();
-        if (token != null && !token.isEmpty()) {
+        if (hasStoredSession()) {
             navigateToMain();
         } else {
             showError(getString(R.string.error_biometric_no_session));

@@ -67,7 +67,7 @@ public class SpeedTestFragment extends Fragment {
     private static final int UPLOAD_SAMPLE_COUNT = 2;
 
     private static final int UPLOAD_SIZE_BYTES = 512 * 1024;
-    private static final int DOWNLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+    private static final int DOWNLOAD_SIZE_BYTES = 8 * 1024 * 1024;
     private static final int BUFFER_SIZE = 16384;
 
     private FragmentSpeedTestBinding binding;
@@ -163,9 +163,9 @@ public class SpeedTestFragment extends Fragment {
 
         executor.execute(() -> {
             String baseUrl = normalizeBaseUrl(preferenceManager.getServerUrl());
-            String latencyUrl = baseUrl;
-            String downloadUrl = baseUrl + "speedtest/download";
-            String uploadUrl = baseUrl + "speedtest/upload";
+            String latencyUrl = baseUrl + "healthz";
+            String downloadUrl = baseUrl + "api/speed-test/download?size_mb=8";
+            String uploadUrl = baseUrl + "api/speed-test/upload";
 
             // --- Warm up: establish connection pool ---
             postProgress("Warming up connection...", 5);
@@ -205,7 +205,7 @@ public class SpeedTestFragment extends Fragment {
         String requestUrl = url.contains("?") ? url + "&warmup=1" : url + "?warmup=1";
         Request request = new Request.Builder()
                 .url(requestUrl)
-                .head()
+                .get()
                 .build();
         try (Response response = client.newCall(request).execute()) {
             // discard
@@ -236,7 +236,7 @@ public class SpeedTestFragment extends Fragment {
                     : baseUrl + "?ping=" + i + "&t=" + System.nanoTime();
             Request request = new Request.Builder()
                     .url(requestUrl)
-                    .head()
+                    .get()
                     .addHeader("Cache-Control", "no-cache, no-store")
                     .addHeader("Pragma", "no-cache")
                     .build();
@@ -288,6 +288,10 @@ public class SpeedTestFragment extends Fragment {
                     continue;
                 }
 
+                long expectedBytes = conn.getContentLengthLong() > 0
+                        ? conn.getContentLengthLong()
+                        : DOWNLOAD_SIZE_BYTES;
+
                 // Timing starts AFTER headers are received (connection is
                 // established). This gives a pure data transfer measurement.
                 long totalBytes = 0;
@@ -299,7 +303,7 @@ public class SpeedTestFragment extends Fragment {
                     while ((bytesRead = in.read(buffer)) != -1) {
                         totalBytes += bytesRead;
 
-                        int pct = 30 + (int) ((totalBytes * 30.0) / DOWNLOAD_SIZE_BYTES);
+                        int pct = 30 + (int) ((totalBytes * 30.0) / Math.max(1, expectedBytes));
                         postProgress("Downloading...", Math.min(pct, 60));
                     }
                 }
@@ -413,7 +417,11 @@ public class SpeedTestFragment extends Fragment {
 
         isTestRunning = false;
         setTestRunningUI(false);
-        binding.tvTestStatus.setText("Test complete");
+        if (result.latencyMs < 0 && result.downloadMbps <= 0.0 && result.uploadMbps <= 0.0) {
+            binding.tvTestStatus.setText("Test failed. Check server reachability.");
+        } else {
+            binding.tvTestStatus.setText("Test complete");
+        }
         binding.progressBar.setProgress(100);
 
         updateGaugeChart(result);

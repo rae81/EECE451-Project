@@ -73,6 +73,7 @@ public class StatisticsFragment extends Fragment {
 
     private static final String TAG = "StatisticsFragment";
     private static final double QUALITY_UNAVAILABLE_THRESHOLD = -900.0;
+    private static final long MIN_LOCAL_DURATION_MS = 1_000L;
 
     // -- Fields --------------------------------------------------------------
 
@@ -158,6 +159,8 @@ public class StatisticsFragment extends Fragment {
                 Color.parseColor("#1976D2"),
                 Color.parseColor("#388E3C"),
                 Color.parseColor("#FFA000"));
+        binding.swipeRefresh.setOnChildScrollUpCallback((parent, child) ->
+                binding != null && binding.scrollViewContent.canScrollVertically(-1));
         binding.swipeRefresh.setOnRefreshListener(this::fetchStats);
     }
 
@@ -247,6 +250,7 @@ public class StatisticsFragment extends Fragment {
 
                 if (response.isSuccessful() && response.body() != null) {
                     populateCharts(response.body());
+                    fetchGlobalDeviceAverages(from, to);
                 } else {
                     Log.e(TAG, "Stats request failed: " + response.code());
                     fetchLocalStats();
@@ -274,6 +278,7 @@ public class StatisticsFragment extends Fragment {
             local.setOperatorTime(avgPercentByOperator(entries));
             local.setNetworkTypeTime(avgPercentByNetwork(entries));
             local.setAvgSignalPerType(avgSignalByNetwork(entries));
+            local.setAvgSignalPerDevice(avgSignalByDevice(entries));
             local.setAvgSnrPerType(avgSnrByNetwork(entries));
             local.setTotalRecords(entries.size());
 
@@ -288,32 +293,73 @@ public class StatisticsFragment extends Fragment {
     }
 
     private Map<String, Double> avgPercentByOperator(List<CellDataEntity> entries) {
-        return percentageMap(entries, true);
+        return durationPercentageMap(entries, true);
     }
 
     private Map<String, Double> avgPercentByNetwork(List<CellDataEntity> entries) {
-        return percentageMap(entries, false);
+        return durationPercentageMap(entries, false);
     }
 
-    private Map<String, Double> percentageMap(List<CellDataEntity> entries, boolean operator) {
-        java.util.LinkedHashMap<String, Integer> counts = new java.util.LinkedHashMap<>();
-        for (CellDataEntity entity : entries) {
-            String key = operator ? entity.getOperator() : entity.getNetworkType();
-            if (key == null || key.trim().isEmpty()) {
-                key = "Unknown";
-            }
-            counts.put(key, counts.getOrDefault(key, 0) + 1);
+    private Map<String, Double> durationPercentageMap(List<CellDataEntity> entries, boolean operator) {
+        List<CellDataEntity> sorted = sortByTimestamp(entries);
+        java.util.LinkedHashMap<String, Long> durationsMs = new java.util.LinkedHashMap<>();
+        if (sorted.isEmpty()) {
+            return new java.util.LinkedHashMap<>();
         }
+
+        CellDataEntity current = sorted.get(0);
+        long currentStart = dateFrom;
+        for (int index = 1; index < sorted.size(); index++) {
+            CellDataEntity next = sorted.get(index);
+            long transitionAt = Math.min(dateTo, Math.max(dateFrom, next.getTimestamp()));
+            if (transitionAt > currentStart) {
+                String key = statsGroupingKey(current, operator);
+                durationsMs.put(key, durationsMs.getOrDefault(key, 0L) + (transitionAt - currentStart));
+            }
+            current = next;
+            currentStart = Math.max(dateFrom, next.getTimestamp());
+        }
+
+        if (dateTo > currentStart) {
+            String key = statsGroupingKey(current, operator);
+            durationsMs.put(key, durationsMs.getOrDefault(key, 0L) + (dateTo - currentStart));
+        }
+
         java.util.LinkedHashMap<String, Double> result = new java.util.LinkedHashMap<>();
-        int total = Math.max(1, entries.size());
-        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
-            result.put(entry.getKey(), (entry.getValue() * 100.0) / total);
+        long totalDuration = 0L;
+        for (Long value : durationsMs.values()) {
+            totalDuration += value != null ? value : 0L;
+        }
+        if (totalDuration <= 0L) {
+            result.put(statsGroupingKey(current, operator), 100.0);
+            return result;
+        }
+        for (Map.Entry<String, Long> entry : durationsMs.entrySet()) {
+            result.put(entry.getKey(), (entry.getValue() * 100.0) / totalDuration);
         }
         return result;
     }
 
     private Map<String, Double> avgSignalByNetwork(List<CellDataEntity> entries) {
         return averageByNetwork(entries, false);
+    }
+
+    private Map<String, Double> avgSignalByDevice(List<CellDataEntity> entries) {
+        java.util.LinkedHashMap<String, Double> totals = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (CellDataEntity entity : entries) {
+            String key = entity.getDeviceId();
+            if (key == null || key.trim().isEmpty()) {
+                key = "Unknown";
+            }
+            totals.put(key, totals.getOrDefault(key, 0.0) + entity.getSignalPower());
+            counts.put(key, counts.getOrDefault(key, 0) + 1);
+        }
+        java.util.LinkedHashMap<String, Double> result = new java.util.LinkedHashMap<>();
+        for (String key : totals.keySet()) {
+            result.put(key, totals.get(key) / Math.max(1, counts.get(key)));
+        }
+        return result;
     }
 
     private Map<String, Double> avgSnrByNetwork(List<CellDataEntity> entries) {
@@ -347,6 +393,7 @@ public class StatisticsFragment extends Fragment {
     private void populateCharts(@NonNull StatsResponse stats) {
         boolean hasData = false;
         updateSummaryCards(stats);
+        updateDeviceAverageCard(stats.getAvgSignalPerDevice());
 
         // 1. Operator pie chart
         Map<String, Float> operatorMap = stats.getConnectivityByOperator();
@@ -374,6 +421,11 @@ public class StatisticsFragment extends Fragment {
         if (snrMap != null && !snrMap.isEmpty()) {
             hasData = true;
             populateSnrBarChart(snrMap);
+        }
+
+        Map<String, Double> deviceSignalMap = stats.getAvgSignalPerDevice();
+        if (deviceSignalMap != null && !deviceSignalMap.isEmpty()) {
+            hasData = true;
         }
 
         showEmptyState(!hasData);
@@ -501,6 +553,76 @@ public class StatisticsFragment extends Fragment {
                 .setValueFormatter(new IndexAxisValueFormatter(labels));
         binding.barChartSnr.setData(barData);
         binding.barChartSnr.invalidate();
+    }
+
+    private void updateDeviceAverageCard(Map<String, Double> deviceSignalMap) {
+        if (binding == null) {
+            return;
+        }
+        if (deviceSignalMap == null || deviceSignalMap.isEmpty()) {
+            binding.tvAvgSignalPerDevice.setText(getString(R.string.statistics_device_signal_empty));
+            return;
+        }
+
+        String currentDeviceId = preferenceManager.getDeviceId();
+        StringBuilder builder = new StringBuilder();
+        int index = 0;
+        for (Map.Entry<String, Double> entry : deviceSignalMap.entrySet()) {
+            if (index > 0) {
+                builder.append('\n');
+            }
+            String label = currentDeviceId.equals(entry.getKey())
+                    ? getString(R.string.statistics_this_device_label)
+                    : abbreviateDeviceId(entry.getKey());
+            builder.append(label)
+                    .append(": ")
+                    .append(String.format(Locale.US, "%.0f dBm", entry.getValue()));
+            index++;
+        }
+        binding.tvAvgSignalPerDevice.setText(builder.toString());
+    }
+
+    private void fetchGlobalDeviceAverages(@NonNull String from, @NonNull String to) {
+        apiService.getAvgAllStats(from, to).enqueue(new Callback<StatsResponse>() {
+            @Override
+            public void onResponse(@NonNull Call<StatsResponse> call,
+                                   @NonNull Response<StatsResponse> response) {
+                if (binding == null || !response.isSuccessful() || response.body() == null) {
+                    return;
+                }
+                updateDeviceAverageCard(response.body().getAvgSignalPerDevice());
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<StatsResponse> call, @NonNull Throwable t) {
+                // Keep the per-device section populated with the device-scoped response.
+            }
+        });
+    }
+
+    @NonNull
+    private String statsGroupingKey(@NonNull CellDataEntity entity, boolean operator) {
+        String value = operator ? entity.getOperator() : entity.getNetworkType();
+        return value == null || value.trim().isEmpty() ? "Unknown" : value;
+    }
+
+    @NonNull
+    private List<CellDataEntity> sortByTimestamp(@NonNull List<CellDataEntity> entries) {
+        List<CellDataEntity> sorted = new ArrayList<>(entries);
+        sorted.sort((left, right) -> Long.compare(left.getTimestamp(), right.getTimestamp()));
+        if (sorted.size() == 1 && dateTo <= dateFrom) {
+            CellDataEntity only = sorted.get(0);
+            only.setTimestamp(only.getTimestamp() + MIN_LOCAL_DURATION_MS);
+        }
+        return sorted;
+    }
+
+    @NonNull
+    private String abbreviateDeviceId(@NonNull String deviceId) {
+        if (deviceId.length() <= 16) {
+            return deviceId;
+        }
+        return deviceId.substring(0, 8) + "..." + deviceId.substring(deviceId.length() - 4);
     }
 
     // -- Color helpers -------------------------------------------------------

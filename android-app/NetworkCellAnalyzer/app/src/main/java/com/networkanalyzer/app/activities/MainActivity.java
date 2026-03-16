@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.View;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -24,6 +25,7 @@ import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.snackbar.Snackbar;
 import com.networkanalyzer.app.R;
@@ -38,22 +40,13 @@ import java.util.Map;
 /**
  * Primary container activity for the application.
  * <p>
- * Hosts a drawer-organized navigation shell for the six main screens
- * (Dashboard, Statistics, Heatmap, Speed Test, History, Settings) and a
- * {@code NavHostFragment} driven by the Navigation Component.
- * <p>
- * On creation the activity:
- * <ol>
- *   <li>Applies the user's dark-mode preference.</li>
- *   <li>Requests all required runtime permissions.</li>
- *   <li>Starts {@link CellMonitorService} as a foreground service.</li>
- * </ol>
+ * Hosts a bottom-navigation shell for the four primary screens
+ * (Dashboard, Map, Analytics, History) and a side drawer for secondary
+ * tools (Speed Test, Tower Clusters, Diagnostics, Settings).
  */
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
-
-    /** Request code used with the legacy {@link #onRequestPermissionsResult} path. */
     private static final int REQUEST_CODE_PERMISSIONS = 1001;
 
     private ActivityMainBinding binding;
@@ -61,14 +54,6 @@ public class MainActivity extends AppCompatActivity {
     private NavController navController;
     private AppBarConfiguration appBarConfiguration;
 
-    // -------------------------------------------------------------------------
-    // Permission launcher (Activity Result API)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Handles the result of a multi-permission request issued via the
-     * Activity Result API.
-     */
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(),
@@ -80,7 +65,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        // Apply dark-mode preference before inflation.
         preferenceManager = new PreferenceManager(this);
         applyDarkModePreference();
 
@@ -96,7 +80,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Re-apply in case the user toggled dark mode from settings and came back.
         applyDarkModePreference();
     }
 
@@ -110,11 +93,6 @@ public class MainActivity extends AppCompatActivity {
     // Navigation
     // -------------------------------------------------------------------------
 
-    /**
-     * Initialises the Navigation Component. The {@code NavHostFragment} is
-     * looked up from the layout and its {@link NavController} is wired to the
-     * top app bar and side drawer for a clearer screen hierarchy.
-     */
     private void setupNavigation() {
         NavHostFragment navHostFragment = (NavHostFragment)
                 getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
@@ -129,25 +107,42 @@ public class MainActivity extends AppCompatActivity {
         DrawerLayout drawerLayout = binding.drawerLayout;
         NavigationView navigationView = binding.navigationView;
         MaterialToolbar topAppBar = binding.topAppBar;
+        BottomNavigationView bottomNav = binding.bottomNavigation;
 
         setSupportActionBar(topAppBar);
 
+        // All top-level destinations (no back arrow shown)
         appBarConfiguration = new AppBarConfiguration.Builder(
                 R.id.dashboardFragment,
-                R.id.statisticsFragment,
                 R.id.heatmapFragment,
-                R.id.speedTestFragment,
+                R.id.statisticsFragment,
                 R.id.historyFragment,
+                R.id.speedTestFragment,
+                R.id.towerClustersFragment,
+                R.id.diagnosticsFragment,
                 R.id.settingsFragment)
                 .setOpenableLayout(drawerLayout)
                 .build();
 
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
+        NavigationUI.setupWithNavController(bottomNav, navController);
         NavigationUI.setupWithNavController(navigationView, navController);
 
+        // Handle destination changes
         navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
+            // Update toolbar title
             topAppBar.setTitle(destination.getLabel());
-            topAppBar.setSubtitle(getToolbarSubtitle(destination.getId()));
+
+            // Close drawer on any navigation
+            drawerLayout.closeDrawers();
+
+            // Show/hide bottom nav for detail screens
+            int destId = destination.getId();
+            if (destId == R.id.towerClusterDetailFragment) {
+                bottomNav.setVisibility(View.GONE);
+            } else {
+                bottomNav.setVisibility(View.VISIBLE);
+            }
         });
     }
 
@@ -157,47 +152,13 @@ public class MainActivity extends AppCompatActivity {
                 || super.onSupportNavigateUp();
     }
 
-    private int getToolbarSubtitle(int destinationId) {
-        if (destinationId == R.id.dashboardFragment) {
-            return R.string.dashboard_subtitle;
-        }
-        if (destinationId == R.id.statisticsFragment) {
-            return R.string.statistics_subtitle;
-        }
-        if (destinationId == R.id.heatmapFragment) {
-            return R.string.heatmap_subtitle;
-        }
-        if (destinationId == R.id.speedTestFragment) {
-            return R.string.speed_test_subtitle;
-        }
-        if (destinationId == R.id.historyFragment) {
-            return R.string.history_subtitle;
-        }
-        if (destinationId == R.id.settingsFragment) {
-            return R.string.settings_subtitle;
-        }
-        return R.string.app_summary;
-    }
-
     // -------------------------------------------------------------------------
     // Permissions
     // -------------------------------------------------------------------------
 
-    /**
-     * Builds the list of permissions the app requires at runtime and requests
-     * any that have not yet been granted.
-     * <p>
-     * The set of permissions varies by API level:
-     * <ul>
-     *   <li>{@code ACCESS_FINE_LOCATION} and {@code ACCESS_COARSE_LOCATION} -- always.</li>
-     *   <li>{@code READ_PHONE_STATE} -- always.</li>
-     *   <li>{@code POST_NOTIFICATIONS} -- Android 13+ (API 33).</li>
-     * </ul>
-     */
     private void requestRequiredPermissions() {
         List<String> permissionsNeeded = new ArrayList<>();
 
-        // Location permissions -- critical for cell info.
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
@@ -206,14 +167,10 @@ public class MainActivity extends AppCompatActivity {
                 != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         }
-
-        // Phone state -- required to read cell info.
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
                 != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE);
         }
-
-        // Notification permission -- Android 13+ (API 33).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -222,10 +179,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (permissionsNeeded.isEmpty()) {
-            // All permissions already granted -- start monitoring.
             onAllPermissionsGranted();
         } else {
-            // Check if we need to show a rationale for any of the requested permissions.
             boolean shouldShowRationale = false;
             for (String perm : permissionsNeeded) {
                 if (ActivityCompat.shouldShowRequestPermissionRationale(this, perm)) {
@@ -233,22 +188,14 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 }
             }
-
             if (shouldShowRationale) {
                 showPermissionRationale(permissionsNeeded);
             } else {
-                permissionLauncher.launch(
-                        permissionsNeeded.toArray(new String[0]));
+                permissionLauncher.launch(permissionsNeeded.toArray(new String[0]));
             }
         }
     }
 
-    /**
-     * Displays an explanatory dialog before requesting permissions, giving the
-     * user context for why the app needs them.
-     *
-     * @param permissions the list of permissions about to be requested.
-     */
     private void showPermissionRationale(@NonNull List<String> permissions) {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.permission_rationale_title)
@@ -265,11 +212,6 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    /**
-     * Processes the results of a multi-permission request.
-     *
-     * @param results map of permission name to granted status.
-     */
     private void onPermissionsResult(@NonNull Map<String, Boolean> results) {
         boolean allGranted = true;
         boolean locationGranted = true;
@@ -287,29 +229,16 @@ public class MainActivity extends AppCompatActivity {
         if (allGranted) {
             onAllPermissionsGranted();
         } else if (!locationGranted) {
-            // Location is critical -- explain and offer to open app settings.
             showPermissionDeniedDialog();
         } else {
-            // Non-critical permissions were denied (e.g. notifications).
-            // Start the service anyway; it can still run without notifications
-            // on pre-13 devices but the UX will be degraded on 13+.
             startCellMonitorService();
         }
     }
 
-    /**
-     * Called when all required runtime permissions have been granted.
-     * Starts the foreground cell monitoring service.
-     */
     private void onAllPermissionsGranted() {
         startCellMonitorService();
     }
 
-    /**
-     * Called when one or more permissions were denied by the user without
-     * selecting "Don't ask again". The app can still be used in a limited
-     * capacity.
-     */
     private void onPermissionsDenied() {
         Snackbar.make(binding.getRoot(),
                         R.string.permission_denied_message,
@@ -318,10 +247,6 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    /**
-     * Shows a dialog explaining that a critical permission (location) was
-     * denied, and offers to open the system app settings screen.
-     */
     private void showPermissionDeniedDialog() {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.permission_denied_title)
@@ -334,10 +259,6 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    /**
-     * Opens the system "App Info" settings screen for this application, where
-     * the user can manually grant permissions.
-     */
     private void openAppSettings() {
         Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
         intent.setData(Uri.fromParts("package", getPackageName(), null));
@@ -348,13 +269,7 @@ public class MainActivity extends AppCompatActivity {
     // Foreground Service
     // -------------------------------------------------------------------------
 
-    /**
-     * Starts {@link CellMonitorService} as a foreground service. On API 26+
-     * the service must be started via
-     * {@link ContextCompat#startForegroundService(android.content.Context, Intent)}.
-     */
     private void startCellMonitorService() {
-        // Only start the service if we have the minimum required permission.
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "Cannot start CellMonitorService -- location permission not granted.");
@@ -377,17 +292,6 @@ public class MainActivity extends AppCompatActivity {
     // Dark Mode
     // -------------------------------------------------------------------------
 
-    /**
-     * Reads the user's dark-mode preference from {@link PreferenceManager} and
-     * applies it via {@link AppCompatDelegate#setDefaultNightMode(int)}.
-     * <p>
-     * Supported modes:
-     * <ul>
-     *   <li>{@code "on"}  -- force dark mode.</li>
-     *   <li>{@code "off"} -- force light mode.</li>
-     *   <li>{@code "system"} (default) -- follow the system setting.</li>
-     * </ul>
-     */
     private void applyDarkModePreference() {
         String mode = preferenceManager.getDarkMode();
         if (mode == null) {
@@ -409,15 +313,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // -------------------------------------------------------------------------
-    // Public Accessors (used by fragments)
+    // Public Accessors
     // -------------------------------------------------------------------------
 
-    /**
-     * Returns the {@link NavController} managing fragment navigation within
-     * this activity's {@code NavHostFragment}.
-     *
-     * @return the active {@link NavController}.
-     */
     @NonNull
     public NavController getNavController() {
         return navController;

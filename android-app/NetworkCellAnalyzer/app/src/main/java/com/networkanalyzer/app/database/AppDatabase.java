@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase;
  */
 @Database(
         entities = {CellDataEntity.class, SpeedTestEntity.class},
-        version = 2,
+        version = 4,
         exportSchema = true
 )
 public abstract class AppDatabase extends RoomDatabase {

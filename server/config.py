@@ -20,6 +20,10 @@ class Config:
     HEATMAP_DEFAULT_POINT_LIMIT = int(os.getenv("HEATMAP_DEFAULT_POINT_LIMIT", "1200"))
     ACCESS_TOKEN_MAX_AGE_SECONDS = int(os.getenv("ACCESS_TOKEN_MAX_AGE_SECONDS", "86400"))
     REFRESH_TOKEN_MAX_AGE_SECONDS = int(os.getenv("REFRESH_TOKEN_MAX_AGE_SECONDS", "2592000"))
+    DEADZONE_MODEL_PATH = os.getenv(
+        "DEADZONE_MODEL_PATH",
+        str(BASE_DIR / "instance" / "ml" / "deadzone_model.joblib"),
+    )
 
 
 class TestConfig(Config):
