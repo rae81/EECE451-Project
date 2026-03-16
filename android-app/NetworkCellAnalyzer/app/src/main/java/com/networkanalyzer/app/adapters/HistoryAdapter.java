@@ -183,6 +183,12 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.HistoryV
             binding.tvNetworkType.setBackground(badgeBg);
             binding.tvNetworkType.setTextColor(Color.WHITE);
 
+            GradientDrawable syncBg = new GradientDrawable();
+            syncBg.setCornerRadius(16f);
+            syncBg.setColor(item.isSynced() ? Color.parseColor("#2E7D32") : Color.parseColor("#D84315"));
+            binding.tvSyncBadge.setBackground(syncBg);
+            binding.tvSyncBadge.setText(item.isSynced() ? "SYNCED" : "PENDING");
+
             // Signal power with color indicator
             int signalPower = item.getSignalPower();
             binding.tvSignalPower.setText(
@@ -201,6 +207,9 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.HistoryV
             binding.tvCellId.setText(
                     toLatinDigits(String.format(Locale.US, "Cell ID: %s",
                             item.getCellId() != null ? item.getCellId() : "--")));
+            binding.tvChannel.setText(
+                    toLatinDigits(String.format(Locale.US, "CH %s",
+                            item.getFrequencyBand() != null ? item.getFrequencyBand() : "--")));
 
             // Click listeners
             itemView.setOnClickListener(v -> {

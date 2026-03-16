@@ -20,6 +20,7 @@ import com.networkanalyzer.app.network.RetrofitClient;
 import com.networkanalyzer.app.network.models.BatchCellDataRequest;
 import com.networkanalyzer.app.network.models.CellDataRequest;
 import com.networkanalyzer.app.network.models.GenericResponse;
+import com.networkanalyzer.app.utils.NetworkIdentityHelper;
 import com.networkanalyzer.app.utils.PreferenceManager;
 
 import java.io.IOException;
@@ -84,6 +85,8 @@ public class OfflineSyncWorker extends Worker {
 
         PreferenceManager preferenceManager = new PreferenceManager(context);
         String deviceId = preferenceManager.getDeviceId();
+        String ipAddress = NetworkIdentityHelper.getBestEffortIpAddress(context);
+        String macAddress = NetworkIdentityHelper.getBestEffortMacAddress(context);
         RetrofitClient retrofitClient = RetrofitClient.getInstance(context);
         retrofitClient.updateBaseUrl();
         ApiService apiService = retrofitClient.getApiService();
@@ -106,6 +109,8 @@ public class OfflineSyncWorker extends Worker {
             request.setLatitude(entity.getLatitude());
             request.setLongitude(entity.getLongitude());
             request.setTimestamp(ISO_FORMAT.format(new Date(entity.getTimestamp())));
+            request.setIpAddress(ipAddress);
+            request.setMacAddress(macAddress);
             request.setSimSlot(entity.getSimSlot());
 
             requestList.add(request);

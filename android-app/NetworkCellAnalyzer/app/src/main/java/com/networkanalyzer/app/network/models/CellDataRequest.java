@@ -2,6 +2,8 @@ package com.networkanalyzer.app.network.models;
 
 import com.google.gson.annotations.SerializedName;
 
+import java.util.List;
+
 public class CellDataRequest {
 
     @SerializedName("device_id")
@@ -51,6 +53,9 @@ public class CellDataRequest {
 
     @SerializedName("sim_slot")
     private int simSlot;
+
+    @SerializedName("neighbor_cells")
+    private List<NeighborCellPayload> neighborCells;
 
     public CellDataRequest() {
     }
@@ -200,5 +205,38 @@ public class CellDataRequest {
 
     public void setSimSlot(int simSlot) {
         this.simSlot = simSlot;
+    }
+
+    public List<NeighborCellPayload> getNeighborCells() {
+        return neighborCells;
+    }
+
+    public void setNeighborCells(List<NeighborCellPayload> neighborCells) {
+        this.neighborCells = neighborCells;
+    }
+
+    public static class NeighborCellPayload {
+        @SerializedName("network_type")
+        private final String networkType;
+
+        @SerializedName("cell_id")
+        private final String cellId;
+
+        @SerializedName("signal_power")
+        private final Integer signalPower;
+
+        @SerializedName("is_registered")
+        private final boolean registered;
+
+        public NeighborCellPayload(String networkType, String cellId, Integer signalPower, boolean registered) {
+            this.networkType = networkType;
+            this.cellId = cellId;
+            this.signalPower = signalPower;
+            this.registered = registered;
+        }
+
+        public boolean isRegistered() {
+            return registered;
+        }
     }
 }

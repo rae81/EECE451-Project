@@ -10,8 +10,10 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.biometric.BiometricManager;
 import androidx.fragment.app.Fragment;
 
+import com.networkanalyzer.app.R;
 import com.networkanalyzer.app.activities.LoginActivity;
 import com.networkanalyzer.app.databinding.FragmentSettingsBinding;
 import com.networkanalyzer.app.network.RetrofitClient;
@@ -58,6 +60,8 @@ public class SettingsFragment extends Fragment {
         String intervalText = binding.etCollectionInterval.getText() != null
                 ? binding.etCollectionInterval.getText().toString().trim()
                 : "";
+        boolean biometricRequested = binding.switchBiometric.isChecked();
+        boolean biometricWasEnabled = preferenceManager.isBiometricEnabled();
 
         if (!serverUrl.isEmpty()) {
             preferenceManager.setServerUrl(serverUrl);
@@ -69,7 +73,6 @@ public class SettingsFragment extends Fragment {
             seconds = 10L;
         }
         preferenceManager.setCollectionInterval(Math.max(5L, seconds) * 1000L);
-        preferenceManager.setBiometricEnabled(binding.switchBiometric.isChecked());
         boolean dark = binding.switchDarkMode.isChecked();
         preferenceManager.setDarkMode(dark ? "on" : "off");
         int nightMode = dark ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO;
@@ -77,7 +80,43 @@ public class SettingsFragment extends Fragment {
             AppCompatDelegate.setDefaultNightMode(nightMode);
         }
         RetrofitClient.getInstance(requireContext()).updateBaseUrl();
-        Toast.makeText(requireContext(), "Settings saved", Toast.LENGTH_SHORT).show();
+
+        if (biometricRequested) {
+            if (!preferenceManager.isLoggedIn()) {
+                binding.switchBiometric.setChecked(false);
+                preferenceManager.setBiometricEnabled(false);
+                Toast.makeText(requireContext(),
+                        R.string.settings_biometric_requires_session,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!isDeviceBiometricReady()) {
+                binding.switchBiometric.setChecked(false);
+                preferenceManager.setBiometricEnabled(false);
+                Toast.makeText(requireContext(),
+                        R.string.settings_biometric_unavailable,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+
+        preferenceManager.setBiometricEnabled(biometricRequested);
+
+        int messageResId = R.string.settings_saved;
+        if (biometricRequested && !biometricWasEnabled) {
+            messageResId = R.string.settings_biometric_enabled;
+        } else if (!biometricRequested && biometricWasEnabled) {
+            messageResId = R.string.settings_biometric_disabled;
+        }
+        Toast.makeText(requireContext(), messageResId, Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean isDeviceBiometricReady() {
+        BiometricManager biometricManager = BiometricManager.from(requireContext());
+        int canAuthenticate = biometricManager.canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG
+                        | BiometricManager.Authenticators.BIOMETRIC_WEAK);
+        return canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS;
     }
 
     private void signOut() {

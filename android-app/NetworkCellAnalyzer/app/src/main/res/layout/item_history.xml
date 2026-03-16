@@ -3,9 +3,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
+    android:layout_marginBottom="6dp"
     app:cardBackgroundColor="@color/colorSurface"
-    app:cardCornerRadius="20dp"
+    app:cardCornerRadius="14dp"
     app:strokeColor="@color/cardStroke"
     app:strokeWidth="1dp">
 
@@ -13,8 +13,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="14dp">
+        android:padding="12dp">
 
+        <!-- Top row: timestamp + badges -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -26,25 +27,40 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textColor="?attr/colorOnSurface"
-                android:alpha="0.5"
+                android:textColor="@color/textSecondary"
                 android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvSyncBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/bg_network_badge"
+                android:paddingStart="6dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="2dp"
+                android:text="SYNCED"
+                android:textColor="@color/badgeText"
+                android:textSize="9sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tvNetworkType"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_network_badge"
-                android:paddingStart="8dp"
+                android:paddingStart="6dp"
                 android:paddingTop="2dp"
-                android:paddingEnd="8dp"
+                android:paddingEnd="6dp"
                 android:paddingBottom="2dp"
                 android:text="@string/placeholder_network_badge"
                 android:textColor="@color/badgeText"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <!-- Middle row: operator + signal -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -58,15 +74,15 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/placeholder_operator"
-                android:textColor="?attr/colorOnSurface"
-                android:textSize="14sp"
+                android:textColor="@color/textPrimary"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <View
                 android:id="@+id/viewSignalIndicator"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:layout_marginEnd="6dp"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:layout_marginEnd="4dp"
                 android:background="@drawable/bg_status_dot" />
 
             <TextView
@@ -74,10 +90,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/placeholder_signal_power"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <!-- Bottom row: SNR, Cell ID, Channel -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -90,18 +107,25 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/placeholder_quality"
-                android:textColor="?attr/colorOnSurface"
-                android:alpha="0.6"
-                android:textSize="12sp" />
+                android:textColor="@color/textSecondary"
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/tvCellId"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
                 android:text="@string/placeholder_cell_id"
-                android:textColor="?attr/colorOnSurface"
-                android:alpha="0.6"
-                android:textSize="12sp" />
+                android:textColor="@color/textSecondary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvChannel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CH --"
+                android:textColor="@color/textSecondary"
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

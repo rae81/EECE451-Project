@@ -5,19 +5,15 @@
         android:icon="@android:drawable/ic_menu_info_details"
         android:title="@string/nav_dashboard" />
     <item
-        android:id="@+id/statisticsFragment"
-        android:icon="@android:drawable/ic_menu_sort_by_size"
-        android:title="@string/nav_statistics" />
-    <item
         android:id="@+id/heatmapFragment"
         android:icon="@android:drawable/ic_dialog_map"
-        android:title="@string/nav_heatmap" />
+        android:title="@string/nav_map" />
+    <item
+        android:id="@+id/statisticsFragment"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        android:title="@string/nav_analytics" />
     <item
         android:id="@+id/historyFragment"
         android:icon="@android:drawable/ic_menu_recent_history"
         android:title="@string/nav_history" />
-    <item
-        android:id="@+id/settingsFragment"
-        android:icon="@android:drawable/ic_menu_preferences"
-        android:title="@string/nav_settings" />
 </menu>

@@ -18,7 +18,7 @@ public final class Constants {
     public static final long DEFAULT_COLLECTION_INTERVAL = 10_000; // 10 seconds
 
     // Server defaults
-    public static final String DEFAULT_SERVER_URL = "http://10.0.2.2:5000/";
+    public static final String DEFAULT_SERVER_URL = "http://192.168.0.139:5000/";
 
     // SharedPreferences
     public static final String PREFS_NAME = "network_analyzer_prefs";
