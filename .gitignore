@@ -9,7 +9,6 @@ TEMP_CONTEXT.md
 
 # Local reference/archive material not needed in source repo
 ref/
-llmfront/
 EECE451_Project_Plan.html
 VM_PHONE_SETUP.txt
 
@@ -17,6 +16,7 @@ VM_PHONE_SETUP.txt
 __pycache__/
 *.pyc
 server/.venv/
+server/data/
 server/instance/
 
 # Android / Gradle
@@ -26,8 +26,3 @@ android-app/**/.idea/
 android-app/**/local.properties
 android-app/**/secrets.properties
 android-app/**/*.iml
-
-# Frontend
-llmfront/node_modules/
-llmfront/.next/
-llmfront/.env*.local

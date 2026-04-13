@@ -1,3 +1,4 @@
+import click
 import csv
 import io
 import math
@@ -889,7 +890,101 @@ def register_routes(app: Flask) -> None:
 
 
 def register_cli(app: Flask) -> None:
-    return None
+    @app.cli.command("retrain-model")
+    @click.option("--force", is_flag=True, help="Force retrain even if model exists.")
+    @click.option("--v2", "use_v2", is_flag=True, help="Use legacy v2 RandomForest training.")
+    @click.option("--tune", is_flag=True, help="Enable Optuna hyperparameter tuning.")
+    @click.option("--optuna-trials", type=int, default=50, help="Number of Optuna trials.")
+    @click.option("--opencellid", type=click.Path(), default=None, help="Override OpenCelliD path.")
+    @click.option("--ookla", type=click.Path(), default=None, help="Override Ookla path.")
+    @click.option("--osm-context", type=click.Path(), default=None, help="Override OSM telecom path.")
+    @click.option("--osm-buildings", type=click.Path(), default=None, help="OSM buildings JSON.")
+    @click.option("--osm-roads", type=click.Path(), default=None, help="OSM roads JSON.")
+    @click.option("--coastline", type=click.Path(), default=None, help="Coastline points JSON.")
+    @click.option("--dense-dem", type=click.Path(), default=None, help="Dense DEM CSV.")
+    @click.option("--dem-grid", type=click.Path(), default=None, help="Sparse DEM grid.")
+    @click.option("--app-data", type=click.Path(), default=None, help="App measurements JSON/CSV.")
+    @click.option("--output-dataset", type=click.Path(), default=None, help="Save training dataset CSV.")
+    @click.option("--report-dir", type=click.Path(), default=None, help="Save training report.")
+    def retrain_model_cmd(
+        force, use_v2, tune, optuna_trials,
+        opencellid, ookla, osm_context, osm_buildings, osm_roads,
+        coastline, dense_dem, dem_grid, app_data, output_dataset, report_dir,
+    ):
+        """Retrain the dead-zone prediction model."""
+        import json as _json
+        from pathlib import Path as _Path
+
+        from deadzone_model import (
+            DEFAULT_LEBANON_BBOX,
+            train_deadzone_model,
+        )
+
+        model_path = _Path(app.config["DEADZONE_MODEL_PATH"])
+        if model_path.exists() and not force:
+            click.echo(f"Model already exists at {model_path}. Use --force to overwrite.")
+            return
+
+        # Resolve default data paths
+        data_dir = _Path(__file__).parent / "data" / "raw"
+        opencellid = opencellid or str(data_dir / "opencellid_lebanon_415.csv.gz")
+        ookla = ookla or str(data_dir / "ookla_mobile_q4_2025.parquet")
+        osm_context = osm_context or str(data_dir / "osm_telecom_lebanon.json")
+        dem_grid = dem_grid or str(data_dir / "lebanon_elevation_grid.csv")
+
+        # Optional v3 data defaults (check if files exist)
+        if osm_buildings is None:
+            candidate = data_dir / "osm_buildings_lebanon.json"
+            if candidate.exists():
+                osm_buildings = str(candidate)
+        if osm_roads is None:
+            candidate = data_dir / "osm_roads_lebanon.json"
+            if candidate.exists():
+                osm_roads = str(candidate)
+        if coastline is None:
+            candidate = data_dir / "lebanon_coastline.json"
+            if candidate.exists():
+                coastline = str(candidate)
+        if dense_dem is None:
+            candidate = data_dir / "lebanon_dem_dense.csv"
+            if candidate.exists():
+                dense_dem = str(candidate)
+
+        report_dir = report_dir or str(model_path.parent / "reports")
+
+        # Get DB session for app measurements
+        db_session = None
+        if not use_v2:
+            try:
+                from extensions import db
+                db_session = db.session
+            except Exception:
+                pass
+
+        try:
+            result = train_deadzone_model(
+                opencellid_path=opencellid,
+                output_model_path=str(model_path),
+                ookla_path=ookla,
+                osm_path=osm_context,
+                dem_path=dem_grid,
+                bbox=DEFAULT_LEBANON_BBOX,
+                report_dir=report_dir,
+                output_dataset_path=output_dataset,
+                use_v3=not use_v2,
+                app_data_path=app_data,
+                osm_buildings_path=osm_buildings,
+                osm_roads_path=osm_roads,
+                coastline_path=coastline,
+                dense_dem_path=dense_dem,
+                tune=tune,
+                n_optuna_trials=optuna_trials,
+                db_session=db_session,
+            )
+            click.echo(_json.dumps(result, indent=2))
+        except Exception as e:
+            click.echo(f"Training failed: {e}", err=True)
+            raise click.Abort()
 
 
 def _ensure_instance_dir(app: Flask) -> None:

@@ -3,11 +3,15 @@ Flask-Cors==5.0.1
 Flask-SQLAlchemy==3.1.1
 Flask-SocketIO==5.5.1
 gunicorn==23.0.0
+h3>=4.0.0
 joblib==1.5.3
+lightgbm>=4.3.0
 matplotlib==3.10.8
 numpy==2.4.3
+optuna>=3.6.0
 pandas==3.0.1
 pyarrow==23.0.1
 reportlab==4.4.0
 scikit-learn==1.8.0
+shap>=0.45.0
 simple-websocket==1.1.0
