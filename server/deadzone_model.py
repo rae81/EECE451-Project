@@ -23,10 +23,23 @@ from sklearn.neighbors import BallTree
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
+try:
+    from deadzone_features import (
+        ALL_FEATURE_NAMES,
+        CATEGORICAL_FEATURES_V3,
+        NUMERIC_FEATURES_V3,
+        FeatureContext,
+        build_feature_row,
+    )
+    from deadzone_explain import compute_shap_reasons
+    HAS_V3_MODULES = True
+except ImportError:
+    HAS_V3_MODULES = False
 
 EARTH_RADIUS_KM = 6371.0088
 DEFAULT_LEBANON_BBOX = (33.05, 35.09, 34.72, 36.68)
-MODEL_VERSION = 2
+MODEL_VERSION = 3
+MODEL_VERSION_LEGACY = 2
 
 NUMERIC_FEATURES = [
     "latitude",
@@ -120,9 +133,17 @@ class DeadzonePrediction:
 
 
 class DeadzoneRuntime:
+    """Loads a trained model bundle and serves predictions.
+
+    Supports both v2 (RandomForest, 22 features) and v3 (dual LightGBM,
+    43 features) bundles transparently.
+    """
+
     def __init__(self, bundle: dict):
         self.bundle = bundle
-        self.model = bundle["model"]
+        self.bundle_version = bundle.get("model_version", 2)
+        self.model = bundle["model"]  # classifier pipeline
+        self.regressor = bundle.get("regressor")  # v3 only
         self.metadata = bundle["metadata"]
         self.reference_cells = bundle["reference_cells"].copy()
         self.ookla_tiles = bundle.get("ookla_tiles")
@@ -134,6 +155,7 @@ class DeadzoneRuntime:
             reference_cells = sub_bundle["reference_cells"].copy()
             self.specialized_variants[key] = {
                 "model": sub_bundle["model"],
+                "regressor": sub_bundle.get("regressor"),
                 "metadata": sub_bundle["metadata"],
                 "reference_cells": reference_cells,
                 "group_trees": self._build_group_trees(reference_cells),
@@ -148,6 +170,52 @@ class DeadzoneRuntime:
                 self.telecom_context = telecom
                 self.telecom_tree = self._build_tree(telecom)
         self.dem_tree = self._build_tree(self.dem_grid)
+
+        # v3: build FeatureContext for rich feature computation
+        self._feature_ctx = None
+        if self.bundle_version >= 3 and HAS_V3_MODULES:
+            self._init_v3_context(bundle)
+
+    def _init_v3_context(self, bundle: dict) -> None:
+        """Initialise the v3 FeatureContext with all auxiliary data."""
+        dem_lats, dem_lons, dem_elevs = None, None, None
+        if self.dem_grid is not None and not self.dem_grid.empty:
+            dem_lats = self.dem_grid["latitude"].values.astype(float)
+            dem_lons = self.dem_grid["longitude"].values.astype(float)
+            dem_elevs = pd.to_numeric(self.dem_grid["elevation_m"], errors="coerce").values
+
+        osm_telecom_df, osm_buildings_df, osm_roads_df, coast_df = None, None, None, None
+        if self.osm_context is not None and not self.osm_context.empty:
+            osm_telecom_df = self.osm_context[self.osm_context["feature_kind"] == "telecom"].reset_index(drop=True)
+
+        # Load optional v3 auxiliary data from bundle
+        for key, target in [
+            ("osm_buildings", "osm_buildings_df"),
+            ("osm_roads", "osm_roads_df"),
+            ("coastline", "coast_df"),
+        ]:
+            df = bundle.get(key)
+            if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
+                locals()[target] = df
+
+        osm_buildings_df = bundle.get("osm_buildings")
+        osm_roads_df = bundle.get("osm_roads")
+        coast_df = bundle.get("coastline")
+
+        h3_aggregates = bundle.get("h3_aggregates")
+
+        self._feature_ctx = FeatureContext(
+            ref_cells=self.reference_cells,
+            ookla_df=self.ookla_tiles,
+            dem_lats=dem_lats,
+            dem_lons=dem_lons,
+            dem_elevations=dem_elevs,
+            osm_telecom_df=osm_telecom_df if osm_telecom_df is not None and not osm_telecom_df.empty else None,
+            osm_buildings_df=osm_buildings_df if isinstance(osm_buildings_df, pd.DataFrame) and not osm_buildings_df.empty else None,
+            osm_roads_df=osm_roads_df if isinstance(osm_roads_df, pd.DataFrame) and not osm_roads_df.empty else None,
+            coast_df=coast_df if isinstance(coast_df, pd.DataFrame) and not coast_df.empty else None,
+            h3_aggregates=h3_aggregates,
+        )
 
     @staticmethod
     def _build_tree(frame: pd.DataFrame | None) -> BallTree | None:
@@ -172,17 +240,104 @@ class DeadzoneRuntime:
     def predict(self, latitude: float, longitude: float, operator: str, network_type: str) -> dict | None:
         normalized_operator = normalize_operator_name(operator)
         normalized_network = normalize_network_type(network_type)
-        variant = self.specialized_variants.get(group_model_key(normalized_operator, normalized_network))
+
+        # Dispatch to v3 path if bundle supports it
+        if self.bundle_version >= 3 and self._feature_ctx is not None:
+            return self._predict_v3(latitude, longitude, normalized_operator, normalized_network)
+
+        # Legacy v2 path
+        return self._predict_v2(latitude, longitude, normalized_operator, normalized_network)
+
+    def _predict_v3(self, latitude: float, longitude: float, operator: str, network_type: str) -> dict | None:
+        """v3 prediction: dual LightGBM with SHAP reasons."""
+        variant_key = group_model_key(operator, network_type)
+        variant = self.specialized_variants.get(variant_key)
+        classifier = variant["model"] if variant else self.model
+        regressor = (variant.get("regressor") if variant else self.regressor) or self.regressor
+        metadata = variant["metadata"] if variant else self.metadata
+        variant_name = variant_key if variant else "global"
+
+        # Build v3 feature row
+        features = build_feature_row(
+            latitude, longitude, operator, network_type,
+            self._feature_ctx,
+        )
+
+        # Count nearest towers as support
+        support_count = int(features.get("same_group_density_1km", 0)) + 1
+
+        # Step 1: Regressor predicts signal power
+        from deadzone_features import NUMERIC_FEATURES_V3, CATEGORICAL_FEATURES_V3
+        feature_cols = NUMERIC_FEATURES_V3 + CATEGORICAL_FEATURES_V3
+        frame = pd.DataFrame([{k: features.get(k) for k in feature_cols}])
+
+        if regressor is not None:
+            try:
+                predicted_signal = float(regressor.predict(frame)[0])
+            except Exception:
+                predicted_signal = features.get("cost231_predicted_rsrp", -95.0)
+        else:
+            predicted_signal = features.get("cost231_predicted_rsrp", -95.0)
+
+        # Step 2: Add stacked signal prediction to classifier input
+        cls_features = features.copy()
+        cls_features["signal_pred_oof"] = predicted_signal
+        cls_feature_cols = NUMERIC_FEATURES_V3 + ["signal_pred_oof"] + CATEGORICAL_FEATURES_V3
+        cls_frame = pd.DataFrame([{k: cls_features.get(k) for k in cls_feature_cols}])
+
+        # Step 3: Classifier predicts dead-zone risk
+        try:
+            probabilities = classifier.predict_proba(cls_frame)[0]
+            classes = getattr(classifier, "classes_", None)
+            if classes is None:
+                last_step = list(classifier.named_steps.values())[-1]
+                classes = last_step.classes_
+            if len(classes) == 1:
+                risk = float(probabilities[0]) if classes[0] == 1 else 0.0
+            else:
+                positive_class_index = list(classes).index(1)
+                risk = float(probabilities[positive_class_index])
+        except Exception:
+            risk = 0.5
+
+        # Step 4: SHAP-based reasons
+        try:
+            transformed = classifier.named_steps["pre"].transform(cls_frame)
+            all_names = NUMERIC_FEATURES_V3 + ["signal_pred_oof"] + CATEGORICAL_FEATURES_V3
+            reasons = compute_shap_reasons(classifier, transformed, all_names, top_k=3)
+        except Exception:
+            reasons = build_prediction_reasons(features, predicted_signal, risk)
+
+        confidence = max(risk, 1.0 - risk)
+        label = deadzone_label_for_probability(risk)
+        quality = quality_for_signal(predicted_signal)
+
+        return DeadzonePrediction(
+            predicted_signal_power=predicted_signal,
+            predicted_quality=quality,
+            deadzone_risk=risk,
+            deadzone_label=label,
+            confidence=confidence,
+            training_sample_count=int(metadata.get("training_row_count", 0)),
+            nearest_sample_count=support_count,
+            reasons=reasons,
+            model_source="deadzone-model-v3",
+            model_variant=variant_name,
+        ).to_dict()
+
+    def _predict_v2(self, latitude: float, longitude: float, operator: str, network_type: str) -> dict | None:
+        """Legacy v2 prediction path (RandomForest, 22 features)."""
+        variant = self.specialized_variants.get(group_model_key(operator, network_type))
         model = variant["model"] if variant else self.model
         metadata = variant["metadata"] if variant else self.metadata
         group_trees = variant["group_trees"] if variant else self.group_trees
-        variant_name = group_model_key(normalized_operator, normalized_network) if variant else "global"
+        variant_name = group_model_key(operator, network_type) if variant else "global"
 
-        feature_row, support_count, predicted_signal = self._build_feature_row(
+        feature_row, support_count, predicted_signal = self._build_feature_row_v2(
             latitude,
             longitude,
-            normalized_operator,
-            normalized_network,
+            operator,
+            network_type,
             group_trees=group_trees,
         )
         if feature_row is None:
@@ -215,7 +370,7 @@ class DeadzoneRuntime:
             model_variant=variant_name,
         ).to_dict()
 
-    def _build_feature_row(
+    def _build_feature_row_v2(
         self,
         latitude: float,
         longitude: float,
@@ -224,6 +379,7 @@ class DeadzoneRuntime:
         *,
         group_trees: dict[tuple[str, str], tuple[pd.DataFrame, BallTree]],
     ) -> tuple[dict | None, int, float]:
+        """Legacy v2 feature builder (22 features)."""
         group = group_trees.get((operator, network_type))
 
         if group is None:
@@ -1109,18 +1265,28 @@ def train_model_variant(dataset: pd.DataFrame) -> tuple[Pipeline, dict]:
 
 
 def reference_subset_for_runtime(dataset: pd.DataFrame) -> pd.DataFrame:
-    return dataset[
-        [
-            "latitude",
-            "longitude",
-            "operator",
-            "network_type",
-            "avg_signal",
-            "range_m",
-            "samples",
-            "days_since_update",
-        ]
-    ].copy()
+    cols = [c for c in [
+        "latitude", "longitude", "operator", "network_type",
+        "avg_signal", "range_m", "samples", "days_since_update",
+    ] if c in dataset.columns]
+    return dataset[cols].copy()
+
+
+def _load_generic_dataframe(path: str | Path) -> pd.DataFrame | None:
+    """Load a CSV, Parquet, or JSON file into a DataFrame."""
+    path = Path(path)
+    if not path.exists():
+        return None
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        return pd.read_parquet(path)
+    elif suffix in (".csv", ".tsv"):
+        return pd.read_csv(path)
+    elif suffix == ".json":
+        return pd.read_json(path)
+    elif suffix == ".gz" and path.stem.endswith(".csv"):
+        return pd.read_csv(path, compression="gzip")
+    return None
 
 
 def train_deadzone_model(
@@ -1138,7 +1304,44 @@ def train_deadzone_model(
     group_min_rows: int = 120,
     output_dataset_path: str | Path | None = None,
     report_dir: str | Path | None = None,
+    # ── v3 options ──
+    use_v3: bool = True,
+    app_data_path: str | Path | None = None,
+    osm_buildings_path: str | Path | None = None,
+    osm_roads_path: str | Path | None = None,
+    coastline_path: str | Path | None = None,
+    dense_dem_path: str | Path | None = None,
+    tune: bool = False,
+    n_optuna_trials: int = 50,
+    db_session=None,
 ) -> dict:
+    # ── v3 training path ──────────────────────────────────────────
+    if use_v3 and HAS_V3_MODULES:
+        return _train_v3(
+            opencellid_path=opencellid_path,
+            output_model_path=output_model_path,
+            ookla_path=ookla_path,
+            osm_path=osm_path,
+            dem_path=dem_path,
+            bbox=bbox,
+            operator=operator,
+            network_type=network_type,
+            specialize_groups=specialize_groups,
+            specialize_network_type=specialize_network_type,
+            group_min_rows=group_min_rows,
+            output_dataset_path=output_dataset_path,
+            report_dir=report_dir,
+            app_data_path=app_data_path,
+            osm_buildings_path=osm_buildings_path,
+            osm_roads_path=osm_roads_path,
+            coastline_path=coastline_path,
+            dense_dem_path=dense_dem_path,
+            tune=tune,
+            n_optuna_trials=n_optuna_trials,
+            db_session=db_session,
+        )
+
+    # ── Legacy v2 training path (RandomForest) ────────────────────
     reference_cells = load_opencellid_reference(opencellid_path, bbox=bbox)
     reference_cells = filter_reference_scope(reference_cells, operator=operator, network_type=network_type)
     ookla_tiles = load_ookla_tiles(ookla_path, bbox=bbox) if ookla_path else None
@@ -1183,7 +1386,7 @@ def train_deadzone_model(
             }
 
     bundle = {
-        "model_version": MODEL_VERSION,
+        "model_version": MODEL_VERSION_LEGACY,
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "model": model,
         "feature_columns": NUMERIC_FEATURES + CATEGORICAL_FEATURES,
@@ -1210,6 +1413,338 @@ def train_deadzone_model(
         generate_eda_report(dataset, metadata["metrics"], report_dir)
 
     return {"model_path": str(output_model_path), "metrics": metadata["metrics"], "row_count": int(len(dataset))}
+
+
+def _train_v3(
+    opencellid_path: str | Path,
+    output_model_path: str | Path,
+    *,
+    ookla_path: str | Path | None = None,
+    osm_path: str | Path | None = None,
+    dem_path: str | Path | None = None,
+    bbox: tuple[float, float, float, float] | None = None,
+    operator: str | None = None,
+    network_type: str | None = None,
+    specialize_groups: bool = False,
+    specialize_network_type: str | None = None,
+    group_min_rows: int = 120,
+    output_dataset_path: str | Path | None = None,
+    report_dir: str | Path | None = None,
+    app_data_path: str | Path | None = None,
+    osm_buildings_path: str | Path | None = None,
+    osm_roads_path: str | Path | None = None,
+    coastline_path: str | Path | None = None,
+    dense_dem_path: str | Path | None = None,
+    tune: bool = False,
+    n_optuna_trials: int = 50,
+    db_session=None,
+) -> dict:
+    """v3 training: dual LightGBM with tiered labeling, 43 features, spatial CV."""
+    from deadzone_data import (
+        assign_tiered_labels,
+        export_app_measurements,
+        fuse_datasets,
+        load_json_points,
+        precompute_h3_aggregates,
+    )
+    from deadzone_features import (
+        ALL_FEATURE_NAMES,
+        CATEGORICAL_FEATURES_V3,
+        NUMERIC_FEATURES_V3,
+        FeatureContext,
+        build_feature_dataframe,
+    )
+    from deadzone_training import evaluate_dual_model, train_dual_model
+
+    print("=== Dead-Zone Model v3 Training ===")
+
+    # ── 1. Load data sources ──────────────────────────────────────
+    print("[1/6] Loading data sources...")
+    reference_cells = load_opencellid_reference(opencellid_path, bbox=bbox)
+    reference_cells = filter_reference_scope(
+        reference_cells, operator=operator, network_type=network_type,
+    )
+    print(f"  OpenCelliD: {len(reference_cells)} towers")
+
+    ookla_tiles = load_ookla_tiles(ookla_path, bbox=bbox) if ookla_path else None
+    if ookla_tiles is not None:
+        print(f"  Ookla tiles: {len(ookla_tiles)} rows")
+
+    osm_context = load_osm_context(osm_path, bbox=bbox) if osm_path else None
+    dem_grid = load_dem_grid(dem_path, bbox=bbox) if dem_path else None
+
+    # Dense DEM (v3 upgrade — higher resolution)
+    dense_dem = None
+    if dense_dem_path:
+        dense_dem = _load_generic_dataframe(dense_dem_path)
+        if dense_dem is not None:
+            print(f"  Dense DEM: {len(dense_dem)} points")
+
+    # OSM buildings
+    osm_buildings_df = None
+    if osm_buildings_path:
+        osm_buildings_df = load_json_points(osm_buildings_path)
+        if not osm_buildings_df.empty:
+            print(f"  OSM buildings: {len(osm_buildings_df)} features")
+
+    # OSM roads
+    osm_roads_df = None
+    if osm_roads_path:
+        osm_roads_df = load_json_points(osm_roads_path)
+        if not osm_roads_df.empty:
+            print(f"  OSM roads: {len(osm_roads_df)} features")
+
+    # Coastline
+    coast_df = None
+    if coastline_path:
+        coast_df = load_json_points(coastline_path)
+        if not coast_df.empty:
+            print(f"  Coastline: {len(coast_df)} points")
+
+    # App measurements (from DB or file)
+    app_df = None
+    if db_session is not None:
+        app_df = export_app_measurements(db_session)
+        if app_df is not None and not app_df.empty:
+            print(f"  App measurements (DB): {len(app_df)} rows")
+    if (app_df is None or app_df.empty) and app_data_path:
+        app_df = load_json_points(app_data_path)
+        if not app_df.empty:
+            print(f"  App measurements (file): {len(app_df)} rows")
+
+    # H3 aggregates from app data
+    h3_aggregates = None
+    if app_df is not None and not app_df.empty:
+        h3_aggregates = precompute_h3_aggregates(app_df)
+        print(f"  H3 aggregates: {len(h3_aggregates)} hexes")
+
+    # ── 2. Fuse datasets + tiered labeling ────────────────────────
+    print("[2/6] Fusing datasets and applying tiered labels...")
+    dataset = fuse_datasets(
+        opencellid_df=reference_cells,
+        ookla_df=ookla_tiles,
+        app_df=app_df,
+    )
+    if dataset.empty:
+        raise ValueError("Fused dataset is empty. Check input data paths.")
+
+    # Pre-compute COST-231 RSRP for topology labeling (needed by Tier 2/3)
+    if "cost231_predicted_rsrp" not in dataset.columns and len(reference_cells) > 0:
+        from deadzone_propagation import compute_propagation_features
+        ref_tree = BallTree(
+            np.radians(reference_cells[["latitude", "longitude"]].values.astype(float)),
+            metric="haversine",
+        )
+        query = np.radians(dataset[["latitude", "longitude"]].values.astype(float))
+        dists, idxs = ref_tree.query(query, k=1)
+        rsrp_values = []
+        for i in range(len(dataset)):
+            nearest = reference_cells.iloc[idxs[i, 0]]
+            pf = compute_propagation_features(
+                lat=float(dataset.iloc[i]["latitude"]),
+                lon=float(dataset.iloc[i]["longitude"]),
+                operator=str(dataset.iloc[i].get("operator", "")),
+                network_type=str(dataset.iloc[i].get("network_type", "4G")),
+                frequency_band=dataset.iloc[i].get("frequency_band"),
+                nearest_tower_lat=float(nearest["latitude"]),
+                nearest_tower_lon=float(nearest["longitude"]),
+            )
+            rsrp_values.append(pf["cost231_predicted_rsrp"])
+        dataset["cost231_predicted_rsrp"] = rsrp_values
+
+    dataset = assign_tiered_labels(dataset)
+    print(f"  Fused dataset: {len(dataset)} rows")
+    print(f"  Dead-zone rate: {dataset['is_deadzone'].mean():.2%}")
+    for src in dataset["label_source"].unique():
+        n = (dataset["label_source"] == src).sum()
+        print(f"    {src}: {n} rows")
+
+    # ── 3. Build FeatureContext + feature DataFrame ───────────────
+    print("[3/6] Computing 43 features...")
+    # Use dense DEM if available, fall back to sparse DEM grid
+    dem_source = dense_dem if dense_dem is not None else dem_grid
+    dem_lats, dem_lons, dem_elevs = None, None, None
+    if dem_source is not None and not dem_source.empty:
+        dem_lats = dem_source["latitude"].values.astype(float)
+        dem_lons = dem_source["longitude"].values.astype(float)
+        dem_elevs = pd.to_numeric(
+            dem_source.get("elevation_m", dem_source.get("elevation", pd.Series(dtype=float))),
+            errors="coerce",
+        ).values
+
+    osm_telecom_df = None
+    if osm_context is not None and not osm_context.empty:
+        osm_telecom_df = osm_context[osm_context["feature_kind"] == "telecom"].reset_index(drop=True)
+
+    ctx = FeatureContext(
+        ref_cells=reference_cells,
+        ookla_df=ookla_tiles,
+        dem_lats=dem_lats,
+        dem_lons=dem_lons,
+        dem_elevations=dem_elevs,
+        osm_telecom_df=osm_telecom_df if osm_telecom_df is not None and not osm_telecom_df.empty else None,
+        osm_buildings_df=osm_buildings_df if osm_buildings_df is not None and not osm_buildings_df.empty else None,
+        osm_roads_df=osm_roads_df if osm_roads_df is not None and not osm_roads_df.empty else None,
+        coast_df=coast_df if coast_df is not None and not coast_df.empty else None,
+        h3_aggregates=h3_aggregates,
+    )
+
+    feature_df = build_feature_dataframe(dataset, ctx)
+    print(f"  Feature matrix: {feature_df.shape}")
+
+    # ── 4. Train dual model ───────────────────────────────────────
+    print("[4/6] Training dual LightGBM model...")
+    if tune:
+        print(f"  Optuna tuning enabled ({n_optuna_trials} trials per model)")
+
+    labels = dataset[["is_deadzone", "signal_target", "sample_weight",
+                       "regression_weight", "label_source"]].copy()
+
+    result = train_dual_model(
+        feature_df=feature_df,
+        labels=labels,
+        tune=tune,
+        n_optuna_trials=n_optuna_trials,
+    )
+
+    classifier = result["classifier"]
+    regressor = result["regressor"]
+    train_metadata = {
+        "metrics": result.get("metrics", {}),
+        "reg_params": result.get("reg_params", {}),
+        "cls_params": result.get("cls_params", {}),
+        "pos_rate": result.get("pos_rate", 0),
+    }
+
+    # ── 5. Build v3 bundle ────────────────────────────────────────
+    print("[5/6] Building model bundle...")
+    metadata = {
+        "training_row_count": int(len(dataset)),
+        "total_row_count": int(len(dataset)),
+        "positive_count": int(dataset["is_deadzone"].sum()),
+        "positive_rate": round(float(dataset["is_deadzone"].mean()), 4),
+        "operators": sorted(dataset["operator"].dropna().unique().tolist()),
+        "network_types": sorted(dataset["network_type"].dropna().unique().tolist()),
+        "numeric_features": NUMERIC_FEATURES_V3,
+        "categorical_features": CATEGORICAL_FEATURES_V3,
+        "all_features": ALL_FEATURE_NAMES,
+        "bbox": bbox,
+        "scope": {
+            "operator": normalize_operator_name(operator) if operator else None,
+            "network_type": normalize_network_type(network_type) if network_type else None,
+        },
+        "sources": {
+            "opencellid_path": str(opencellid_path),
+            "ookla_path": str(ookla_path) if ookla_path else None,
+            "osm_path": str(osm_path) if osm_path else None,
+            "dem_path": str(dem_path) if dem_path else None,
+            "dense_dem_path": str(dense_dem_path) if dense_dem_path else None,
+            "osm_buildings_path": str(osm_buildings_path) if osm_buildings_path else None,
+            "osm_roads_path": str(osm_roads_path) if osm_roads_path else None,
+            "coastline_path": str(coastline_path) if coastline_path else None,
+        },
+        "tier_counts": {
+            src: int((dataset["label_source"] == src).sum())
+            for src in dataset["label_source"].unique()
+        },
+        "training": train_metadata,
+        "metrics": train_metadata.get("metrics", {}),
+    }
+
+    # Specialized group models (v3)
+    specialized_models = {}
+    target_specialize_network = normalize_network_type(specialize_network_type) if specialize_network_type else None
+    if specialize_groups:
+        for (group_op, group_nt), group_idx in dataset.groupby(["operator", "network_type"], sort=False).groups.items():
+            if target_specialize_network and group_nt != target_specialize_network:
+                continue
+            group_dataset = dataset.loc[group_idx]
+            if len(group_dataset) < group_min_rows or group_dataset["is_deadzone"].nunique() < 2:
+                continue
+            group_features = feature_df.loc[group_idx]
+            group_labels = labels.loc[group_idx]
+            try:
+                grp_result = train_dual_model(
+                    feature_df=group_features,
+                    labels=group_labels,
+                    tune=False,  # skip tuning for subgroups
+                )
+                key = group_model_key(group_op, group_nt)
+                specialized_models[key] = {
+                    "model": grp_result["classifier"],
+                    "regressor": grp_result["regressor"],
+                    "metadata": {
+                        "training_row_count": int(len(group_dataset)),
+                        "variant_scope": {"operator": group_op, "network_type": group_nt},
+                    },
+                    "reference_cells": reference_subset_for_runtime(
+                        reference_cells[
+                            (reference_cells["operator"] == group_op)
+                            & (reference_cells["network_type"] == group_nt)
+                        ]
+                    ),
+                }
+                print(f"  Trained subgroup: {key} ({len(group_dataset)} rows)")
+            except Exception as e:
+                print(f"  Skipping subgroup {group_op}::{group_nt}: {e}")
+
+    bundle = {
+        "model_version": MODEL_VERSION,
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "model": classifier,
+        "regressor": regressor,
+        "feature_columns": ALL_FEATURE_NAMES,
+        "metadata": metadata,
+        "reference_cells": reference_subset_for_runtime(reference_cells),
+        "ookla_tiles": ookla_tiles,
+        "osm_context": osm_context,
+        "dem_grid": dem_source,
+        "osm_buildings": osm_buildings_df,
+        "osm_roads": osm_roads_df,
+        "coastline": coast_df,
+        "h3_aggregates": h3_aggregates,
+        "group_models": specialized_models,
+    }
+    bundle["metadata"]["group_model_keys"] = sorted(specialized_models.keys())
+    bundle["metadata"]["group_model_count"] = len(specialized_models)
+
+    # ── 6. Save ───────────────────────────────────────────────────
+    print("[6/6] Saving bundle...")
+    output_model_path = Path(output_model_path)
+    output_model_path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(bundle, output_model_path)
+    print(f"  Saved: {output_model_path} ({output_model_path.stat().st_size / 1024 / 1024:.1f} MB)")
+
+    if output_dataset_path:
+        output_dataset = Path(output_dataset_path)
+        output_dataset.parent.mkdir(parents=True, exist_ok=True)
+        dataset.to_csv(output_dataset, index=False)
+        print(f"  Dataset saved: {output_dataset}")
+
+    if report_dir:
+        report_path = Path(report_dir)
+        report_path.mkdir(parents=True, exist_ok=True)
+        summary = {
+            "model_version": MODEL_VERSION,
+            "rows": int(len(dataset)),
+            "positive_rate": round(float(dataset["is_deadzone"].mean()), 4),
+            "tier_counts": metadata["tier_counts"],
+            "operators": metadata["operators"],
+            "network_types": metadata["network_types"],
+            "metrics": metadata.get("metrics", {}),
+        }
+        (report_path / "summary.json").write_text(
+            json.dumps(summary, indent=2), encoding="utf-8",
+        )
+        print(f"  Report saved: {report_path / 'summary.json'}")
+
+    print("=== Training complete ===")
+    return {
+        "model_path": str(output_model_path),
+        "metrics": metadata.get("metrics", {}),
+        "row_count": int(len(dataset)),
+        "model_version": MODEL_VERSION,
+    }
 
 
 def split_spatial_train_test(dataset: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1398,6 +1933,15 @@ def main() -> None:
     parser.add_argument("--group-min-rows", type=int, default=120, help="Minimum rows required for a subgroup model.")
     parser.add_argument("--output-dataset", help="Optional path for the prepared training dataset CSV.")
     parser.add_argument("--report-dir", help="Optional directory for EDA outputs.")
+    # v3 options
+    parser.add_argument("--v2", action="store_true", help="Force legacy v2 RandomForest training.")
+    parser.add_argument("--app-data", help="Path to app measurements JSON/CSV (v3).")
+    parser.add_argument("--osm-buildings", help="Path to OSM buildings JSON (v3).")
+    parser.add_argument("--osm-roads", help="Path to OSM roads JSON (v3).")
+    parser.add_argument("--coastline", help="Path to coastline points JSON (v3).")
+    parser.add_argument("--dense-dem", help="Path to dense DEM grid CSV (v3).")
+    parser.add_argument("--tune", action="store_true", help="Enable Optuna hyperparameter tuning (v3).")
+    parser.add_argument("--optuna-trials", type=int, default=50, help="Number of Optuna trials per model (v3).")
     args = parser.parse_args()
 
     bbox = DEFAULT_LEBANON_BBOX if args.lebanon else bbox_from_string(args.bbox)
@@ -1415,6 +1959,14 @@ def main() -> None:
         group_min_rows=args.group_min_rows,
         output_dataset_path=args.output_dataset,
         report_dir=args.report_dir,
+        use_v3=not args.v2,
+        app_data_path=args.app_data,
+        osm_buildings_path=args.osm_buildings,
+        osm_roads_path=args.osm_roads,
+        coastline_path=args.coastline,
+        dense_dem_path=args.dense_dem,
+        tune=args.tune,
+        n_optuna_trials=args.optuna_trials,
     )
     print(json.dumps(result, indent=2))
 

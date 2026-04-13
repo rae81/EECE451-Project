@@ -2,6 +2,7 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
+import pytest
 
 from app import create_app
 from config import TestConfig
@@ -124,7 +125,8 @@ def write_synthetic_training_inputs(tmp_path: Path) -> tuple[Path, Path, Path, P
     return opencellid_path, ookla_path, osm_path, dem_path
 
 
-def test_training_pipeline_and_runtime_prediction(tmp_path):
+def test_v2_training_pipeline_and_runtime_prediction(tmp_path):
+    """Legacy v2 RandomForest training and prediction."""
     opencellid_path, ookla_path, osm_path, dem_path = write_synthetic_training_inputs(tmp_path)
     model_path = tmp_path / "deadzone_model.joblib"
     report_dir = tmp_path / "reports"
@@ -141,6 +143,7 @@ def test_training_pipeline_and_runtime_prediction(tmp_path):
         group_min_rows=8,
         output_dataset_path=dataset_path,
         report_dir=report_dir,
+        use_v3=False,
     )
 
     assert model_path.exists()
@@ -174,6 +177,47 @@ def test_training_pipeline_and_runtime_prediction(tmp_path):
     assert bad_prediction["deadzone_label"] in {"moderate", "high"}
 
 
+def test_v3_training_pipeline_and_prediction(tmp_path):
+    """v3 dual LightGBM training and prediction."""
+    pytest.importorskip("lightgbm")
+    opencellid_path, ookla_path, osm_path, dem_path = write_synthetic_training_inputs(tmp_path)
+    model_path = tmp_path / "deadzone_model_v3.joblib"
+    report_dir = tmp_path / "reports_v3"
+
+    result = train_deadzone_model(
+        opencellid_path,
+        model_path,
+        ookla_path=ookla_path,
+        osm_path=osm_path,
+        dem_path=dem_path,
+        report_dir=report_dir,
+        use_v3=True,
+    )
+
+    assert model_path.exists()
+    assert result["model_version"] == 3
+    assert result["row_count"] >= 5  # H3 dedup reduces rows significantly
+
+    bundle = joblib.load(model_path)
+    assert bundle["model_version"] == 3
+    assert bundle["regressor"] is not None
+
+    # Predict with v3 model
+    pred = predict_deadzone(
+        model_path,
+        latitude=33.8912,
+        longitude=35.5012,
+        operator="Alfa",
+        network_type="4G",
+    )
+    assert pred is not None
+    assert pred["model_source"] == "deadzone-model-v3"
+    assert "deadzone_risk" in pred
+    assert "predicted_signal_power" in pred
+    assert "reasons" in pred
+    assert 0.0 <= pred["deadzone_risk"] <= 1.0
+
+
 def test_flask_predict_and_heatmap_include_deadzone_scores(tmp_path):
     opencellid_path, ookla_path, osm_path, dem_path = write_synthetic_training_inputs(tmp_path)
     model_path = tmp_path / "deadzone_model.joblib"
@@ -186,6 +230,7 @@ def test_flask_predict_and_heatmap_include_deadzone_scores(tmp_path):
         specialize_groups=True,
         specialize_network_type="4G",
         group_min_rows=8,
+        use_v3=False,
     )
 
     client, app = create_test_client()
