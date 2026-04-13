@@ -16,7 +16,7 @@ VM_PHONE_SETUP.txt
 __pycache__/
 *.pyc
 server/.venv/
-server/data/
+server/data/raw/ookla_*.parquet
 server/instance/
 
 # Android / Gradle
