@@ -337,30 +337,43 @@ def label_ookla_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def label_topology_rows(
-    df: pd.DataFrame,
-    tower_density_col: str = "same_group_density_1km",
-) -> pd.DataFrame:
-    """Label rows from tower topology analysis (Tier 3 — lowest confidence).
+def label_topology_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Label gap-fill rows from COST-231 physics estimates (Tier 3).
 
     These labels are physics-model estimates, NOT real measurements.
     They receive the lowest sample_weight to reflect this uncertainty.
-    Only used to fill in areas with zero real measurement coverage.
+    Used to fill geographic areas with zero real measurement coverage.
+
+    Labeling is based purely on predicted RSRP from the propagation
+    model — no tower density bias (gap-fill points are random locations,
+    not tower sites).
     """
     df = df.copy()
     df["label_source"] = "topology"
     df["sample_weight"] = TIER_WEIGHTS["topology"]
 
-    rsrp = df["cost231_predicted_rsrp"] if "cost231_predicted_rsrp" in df.columns else pd.Series(np.nan, index=df.index)
-    density = (df[tower_density_col] if tower_density_col in df.columns else pd.Series(0.0, index=df.index)).fillna(0)
+    rsrp = (
+        df["cost231_predicted_rsrp"]
+        if "cost231_predicted_rsrp" in df.columns
+        else pd.Series(np.nan, index=df.index)
+    )
+    # Cap to physically realistic range: COST-231 Hata is invalid
+    # below ~-130 dBm (model extrapolation beyond its design range)
+    rsrp = rsrp.clip(lower=-130.0)
 
+    # Label based on predicted RSRP thresholds (3GPP TS 36.133)
     conditions = [
-        (rsrp < -115.0) & (density < 2),
-        (rsrp > -90.0) & (density > 3),
+        rsrp < RSRP_DEADZONE,      # -110 dBm: dead zone
+        rsrp > RSRP_FAIR,          # -90 dBm: clearly good
     ]
     choices = [1, 0]
-    df["is_deadzone"] = np.select(conditions, choices, default=-1)
-    df.loc[df["is_deadzone"] == -1, "is_deadzone"] = 0
+    # Default: ambiguous region → label as 0 (not dead zone) with
+    # lower weight so these don't dominate training
+    df["is_deadzone"] = np.select(conditions, choices, default=0)
+
+    # Rows in the ambiguous -110 to -90 range get even lower weight
+    ambiguous = (rsrp >= RSRP_DEADZONE) & (rsrp <= RSRP_FAIR)
+    df.loc[ambiguous, "sample_weight"] = TIER_WEIGHTS["topology"] * 0.5
 
     df["signal_target"] = rsrp
     df["regression_weight"] = 0.3  # Very low — this is modeled, not measured
@@ -461,19 +474,27 @@ def build_training_dataset(
         parts.append(label_ookla_rows(ook))
         print(f"  Tier 2 (Ookla speed tests): {len(parts[-1]):,} rows")
 
-    # ── Tier 3: OpenCelliD topology (lowest confidence, optional) ──
+    # ── Tier 3: Gap-fill points (lowest confidence, optional) ──
+    # Sample random geographic points in areas NOT covered by Tier 1/2.
+    # Unlike the old approach (using tower locations), this samples the
+    # actual coverage landscape — including weak-signal areas far from
+    # towers — giving the model both positive and negative examples.
     if include_topology and opencellid_df is not None and len(opencellid_df) > 0:
-        topo = opencellid_df.copy()
-        topo["source"] = "opencellid"
+        # Determine geographic bounds from existing data
+        all_lats = pd.concat([p["latitude"] for p in parts]) if parts else pd.Series(dtype=float)
+        all_lons = pd.concat([p["longitude"] for p in parts]) if parts else pd.Series(dtype=float)
 
-        # Only include towers NOT already covered by Tier 1/2
+        if len(all_lats) > 0:
+            lat_min, lat_max = all_lats.min() - 0.1, all_lats.max() + 0.1
+            lon_min, lon_max = all_lons.min() - 0.1, all_lons.max() + 0.1
+        else:
+            # Lebanon defaults
+            lat_min, lat_max = 33.05, 34.72
+            lon_min, lon_max = 35.09, 36.68
+
+        # Build set of hexes already covered by Tier 1/2
+        covered_hexes = set()
         if h3 is not None and parts:
-            topo["_h3"] = topo.apply(
-                lambda r: h3.latlng_to_cell(r["latitude"], r["longitude"], h3_resolution)
-                if pd.notna(r["latitude"]) and pd.notna(r["longitude"]) else "",
-                axis=1,
-            )
-            covered_hexes = set()
             for p in parts:
                 p_h3 = p.apply(
                     lambda r: h3.latlng_to_cell(r["latitude"], r["longitude"], h3_resolution)
@@ -481,13 +502,92 @@ def build_training_dataset(
                     axis=1,
                 )
                 covered_hexes.update(p_h3.values)
-            topo = topo[~topo["_h3"].isin(covered_hexes)]
-            if "_h3" in topo.columns:
-                topo = topo.drop(columns=["_h3"])
 
-        if len(topo) > 0:
+        # Generate random points at various distances from towers.
+        # Stratified sampling: 40% within 2 km, 30% 2-5 km, 30% 5-15 km
+        # This avoids both over-sampling "obviously good" tower locations
+        # AND over-sampling "obviously dead" remote mountains.
+        rng = np.random.RandomState(42)
+        n_target = min(len(opencellid_df) * 2, 3000)  # cap gap-fill count
+
+        # Get tower positions for offset sampling
+        tower_lats = opencellid_df["latitude"].values
+        tower_lons = opencellid_df["longitude"].values
+        n_towers = len(tower_lats)
+
+        rand_lats = []
+        rand_lons = []
+        for dist_km, frac in [(2.0, 0.4), (5.0, 0.3), (15.0, 0.3)]:
+            n_pts = int(n_target * frac)
+            # Pick random towers and offset by random direction+distance
+            tidx = rng.randint(0, n_towers, n_pts)
+            angles = rng.uniform(0, 2 * np.pi, n_pts)
+            dists = rng.uniform(0.5, dist_km, n_pts)
+            # Approximate degree offset (1 degree ≈ 111 km)
+            dlat = dists * np.cos(angles) / 111.0
+            dlon = dists * np.sin(angles) / (111.0 * np.cos(np.radians(tower_lats[tidx])))
+            rand_lats.extend(tower_lats[tidx] + dlat)
+            rand_lons.extend(tower_lons[tidx] + dlon)
+
+        rand_lats = np.array(rand_lats)
+        rand_lons = np.array(rand_lons)
+
+        # Clip to bounding box
+        valid = (
+            (rand_lats >= lat_min) & (rand_lats <= lat_max) &
+            (rand_lons >= lon_min) & (rand_lons <= lon_max)
+        )
+        rand_lats = rand_lats[valid]
+        rand_lons = rand_lons[valid]
+
+        gap_rows = []
+        for rlat, rlon in zip(rand_lats, rand_lons):
+            if h3 is not None:
+                hex_id = h3.latlng_to_cell(float(rlat), float(rlon), h3_resolution)
+                if hex_id in covered_hexes:
+                    continue
+                covered_hexes.add(hex_id)  # avoid duplicates
+            gap_rows.append({"latitude": float(rlat), "longitude": float(rlon)})
+
+        if gap_rows:
+            topo = pd.DataFrame(gap_rows)
+            topo["source"] = "gap_fill"
+            # Inherit operator/network_type from nearest tower for labeling
+            from sklearn.neighbors import BallTree as _BT
+            _tree = _BT(
+                np.radians(opencellid_df[["latitude", "longitude"]].values),
+                metric="haversine",
+            )
+            _q = np.radians(topo[["latitude", "longitude"]].values)
+            _, _idx = _tree.query(_q, k=1)
+            for col in ["operator", "network_type"]:
+                if col in opencellid_df.columns:
+                    topo[col] = opencellid_df.iloc[_idx.ravel()][col].values
+                else:
+                    topo[col] = "Unknown"
+
+            # Compute COST-231 predicted RSRP for each gap-fill point
+            # using nearest tower from OpenCelliD — needed for labeling
+            from deadzone_propagation import compute_propagation_features
+            _q2 = np.radians(topo[["latitude", "longitude"]].values)
+            _, _idx2 = _tree.query(_q2, k=1)
+            rsrp_vals = []
+            for j in range(len(topo)):
+                nr = opencellid_df.iloc[_idx2[j, 0]]
+                pf = compute_propagation_features(
+                    float(topo.iloc[j]["latitude"]),
+                    float(topo.iloc[j]["longitude"]),
+                    str(topo.iloc[j].get("operator", "")),
+                    str(topo.iloc[j].get("network_type", "4G")),
+                    topo.iloc[j].get("frequency_band"),
+                    float(nr["latitude"]),
+                    float(nr["longitude"]),
+                )
+                rsrp_vals.append(pf["cost231_predicted_rsrp"])
+            topo["cost231_predicted_rsrp"] = rsrp_vals
+
             parts.append(label_topology_rows(topo))
-            print(f"  Tier 3 (Topology estimates): {len(parts[-1]):,} rows")
+            print(f"  Tier 3 (Gap-fill estimates): {len(parts[-1]):,} rows")
 
     if not parts:
         return pd.DataFrame()
