@@ -227,9 +227,10 @@
           <table>
             <thead>
               <tr>
+                <th>Device</th>
+                <th>Vendor</th>
+                <th>IP / MAC</th>
                 <th>Device ID</th>
-                <th>IP Address</th>
-                <th>MAC Address</th>
                 <th>First Seen</th>
                 <th>Last Seen</th>
                 <th>Status</th>
@@ -239,9 +240,10 @@
             <tbody>
               {% for device in devices %}
               <tr>
-                <td>{{ device.device_id }}</td>
-                <td>{{ device.ip_address or "Unknown" }}</td>
-                <td>{{ device.mac_address or "Unknown" }}</td>
+                <td><strong>{{ device.device_label }}</strong>{% if device.device_owner %}<br><small class="metric-label">{{ device.device_owner }}</small>{% endif %}</td>
+                <td>{{ device.device_vendor }}</td>
+                <td>{{ device.ip_address or "—" }}<br><small class="metric-label">{{ device.mac_formatted or "MAC unavailable" }}</small></td>
+                <td><small>{{ device.device_id[:8] }}…</small></td>
                 <td>{{ device.first_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                 <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                 <td>
@@ -253,7 +255,7 @@
               </tr>
               {% else %}
               <tr>
-                <td colspan="7">No devices have uploaded data yet.</td>
+                <td colspan="8">No devices have uploaded data yet.</td>
               </tr>
               {% endfor %}
             </tbody>

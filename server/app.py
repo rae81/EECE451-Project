@@ -48,6 +48,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import Config
 from deadzone_model import predict_deadzone
+from device_identity import enrich_device_rows, resolve_device_label
 from models import AlertRule, CellData, DeviceLog, NeighborCellData, SpeedTestResult, User, db
 
 
@@ -1623,6 +1624,7 @@ def _fetch_devices(active_window_minutes: int) -> list[dict]:
         )
 
     db.session.commit()
+    enrich_device_rows(devices)
     return devices
 
 
