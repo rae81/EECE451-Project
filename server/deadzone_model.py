@@ -279,11 +279,9 @@ class DeadzoneRuntime:
         else:
             predicted_signal = features.get("cost231_predicted_rsrp", -95.0)
 
-        # Step 2: Add stacked signal prediction to classifier input
-        cls_features = features.copy()
-        cls_features["signal_pred_oof"] = predicted_signal
-        cls_feature_cols = NUMERIC_FEATURES_V3 + ["signal_pred_oof"] + CATEGORICAL_FEATURES_V3
-        cls_frame = pd.DataFrame([{k: cls_features.get(k) for k in cls_feature_cols}])
+        # Step 2: Classifier consumes the primitive feature set directly.
+        cls_feature_cols = NUMERIC_FEATURES_V3 + CATEGORICAL_FEATURES_V3
+        cls_frame = pd.DataFrame([{k: features.get(k) for k in cls_feature_cols}])
 
         # Step 3: Classifier predicts dead-zone risk
         try:
@@ -303,7 +301,7 @@ class DeadzoneRuntime:
         # Step 4: SHAP-based reasons
         try:
             transformed = classifier.named_steps["pre"].transform(cls_frame)
-            all_names = NUMERIC_FEATURES_V3 + ["signal_pred_oof"] + CATEGORICAL_FEATURES_V3
+            all_names = NUMERIC_FEATURES_V3 + CATEGORICAL_FEATURES_V3
             reasons = compute_shap_reasons(classifier, transformed, all_names, top_k=3)
         except Exception:
             reasons = build_prediction_reasons(features, predicted_signal, risk)
