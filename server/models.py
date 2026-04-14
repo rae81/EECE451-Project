@@ -1,10 +1,37 @@
+"""SQLAlchemy ORM models for the Network Cell Analyzer server.
+
+Each class below maps to a single SQL table and implements a
+``to_dict()`` serializer used by the REST endpoints in ``app.py``.
+
+Schema groups
+-------------
+- ``CellData`` + ``NeighborCellData``  — per-sample cellular measurements
+  (the 2G/3G/4G cell-info rows pushed by the Android client).
+- ``DeviceLog``                         — per-device heartbeat / presence.
+- ``SpeedTestResult``                   — Ookla-style speed-test results.
+- ``AlertRule``                         — user-configured signal alerts.
+- ``User``                              — auth accounts.
+
+References
+----------
+- Flask-SQLAlchemy quickstart:
+  https://flask-sqlalchemy.palletsprojects.com/en/3.1.x/quickstart/
+- SQLAlchemy ORM relationship patterns (cascade, back_populates):
+  https://docs.sqlalchemy.org/en/20/orm/cascades.html
+"""
+
 from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
 
 
+# ── Shared SQLAlchemy handle ──────────────────────────────────────────
+# Instantiated at module scope so ``app.py`` and the tests can share one
+# extension instance. Bound to the Flask app via ``db.init_app(app)``.
 db = SQLAlchemy()
 
+
+# ── Cellular measurements ─────────────────────────────────────────────
 
 class CellData(db.Model):
     __tablename__ = "cell_data"
@@ -61,6 +88,8 @@ class CellData(db.Model):
         }
 
 
+# ── Device presence / heartbeats ──────────────────────────────────────
+
 class DeviceLog(db.Model):
     __tablename__ = "device_log"
 
@@ -91,6 +120,8 @@ class DeviceLog(db.Model):
         }
 
 
+# ── Neighbor cells (joined to CellData) ───────────────────────────────
+
 class NeighborCellData(db.Model):
     __tablename__ = "neighbor_cell_data"
 
@@ -111,6 +142,8 @@ class NeighborCellData(db.Model):
             "is_registered": self.is_registered,
         }
 
+
+# ── Speed-test results ────────────────────────────────────────────────
 
 class SpeedTestResult(db.Model):
     __tablename__ = "speed_test_results"
@@ -143,6 +176,8 @@ class SpeedTestResult(db.Model):
         }
 
 
+# ── Alerting rules ────────────────────────────────────────────────────
+
 class AlertRule(db.Model):
     __tablename__ = "alert_rules"
 
@@ -167,6 +202,8 @@ class AlertRule(db.Model):
             "created_at": self.created_at.isoformat(),
         }
 
+
+# ── User accounts ─────────────────────────────────────────────────────
 
 class User(db.Model):
     __tablename__ = "users"

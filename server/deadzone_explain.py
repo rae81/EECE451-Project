@@ -80,6 +80,8 @@ REASON_TEMPLATES: dict[str, str] = {
 _DEFAULT_TEMPLATE = "{feature} = {value:.2f} ({direction} risk)"
 
 
+# ── Reason-string builders ────────────────────────────────────────────
+
 def _format_reason(feature: str, value: float, shap_val: float) -> str:
     """Format a single SHAP-based reason string."""
     direction = "increases" if shap_val > 0 else "decreases"
@@ -89,6 +91,8 @@ def _format_reason(feature: str, value: float, shap_val: float) -> str:
     except (ValueError, KeyError):
         return f"{feature} = {value:.2f} ({direction} risk)"
 
+
+# ── Public SHAP entry point ───────────────────────────────────────────
 
 def compute_shap_reasons(
     classifier_pipeline,
@@ -148,6 +152,8 @@ def compute_shap_reasons(
     except Exception:
         return _fallback_reasons(feature_names, feature_row_transformed, top_k)
 
+
+# ── Fallback for when SHAP fails or isn't available ───────────────────
 
 def _fallback_reasons(
     feature_names: list[str],

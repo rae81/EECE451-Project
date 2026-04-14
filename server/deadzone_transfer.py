@@ -40,6 +40,8 @@ BERLIN_V2X_PARQUET_URLS = [
 ]
 
 
+# ── External-dataset loaders (Berlin V2X parquet, OpenCelliD CSV) ─────
+
 def download_berlin_v2x(
     cache_dir: str | Path = "./data/raw/berlin_v2x",
     force: bool = False,

@@ -1,3 +1,30 @@
+"""Flask REST + Socket.IO server for the Network Cell Analyzer.
+
+Exposes the endpoints consumed by the Android client (auth, device
+heartbeats, cell-measurement ingest, aggregate stats, dead-zone
+predictions, CSV/PDF exports) and a small admin-facing web view.
+
+Route groups (each delimited by a ``# ── ... ───`` header below):
+    - Auth             — signup/login/refresh/me
+    - Devices          — heartbeats + active-device listing
+    - Measurements     — cell-sample ingest, history, neighbors
+    - Statistics       — aggregate charts, heatmap buckets, exports
+    - Dead-zone        — LightGBM prediction + SHAP explanation
+    - Alerts           — user-configured alert rules
+    - Admin / web view — HTML dashboard served from templates/
+
+References
+----------
+- Flask application factory pattern:
+  https://flask.palletsprojects.com/en/3.0.x/patterns/appfactories/
+- Flask-SocketIO integration with Flask-CORS + threading async mode:
+  https://flask-socketio.readthedocs.io/en/latest/
+- itsdangerous signed-token auth (``URLSafeTimedSerializer``):
+  https://itsdangerous.palletsprojects.com/en/2.2.x/timed/
+- ReportLab ``canvas`` for server-rendered PDF reports:
+  https://docs.reportlab.com/reportlab/userguide/ch2_graphics/
+"""
+
 import click
 import csv
 import io
@@ -55,6 +82,7 @@ def create_app(config_object=Config) -> Flask:
 
 
 def register_routes(app: Flask) -> None:
+    # ── Landing + health ──────────────────────────────────────────
     @app.get("/")
     def home():
         return jsonify(
@@ -69,6 +97,7 @@ def register_routes(app: Flask) -> None:
     def healthcheck():
         return jsonify({"status": "healthy"}), 200
 
+    # ── Auth ──────────────────────────────────────────────────────
     @app.post("/auth/register")
     def register_user():
         payload = request.get_json(silent=True)
@@ -144,6 +173,7 @@ def register_routes(app: Flask) -> None:
             db.session.commit()
         return jsonify(_build_auth_response(user, "refreshed"))
 
+    # ── Dead-zone predictions ─────────────────────────────────────
     @app.get("/predict")
     def predict_signal():
         required = ["latitude", "longitude", "operator", "network_type"]
@@ -198,6 +228,7 @@ def register_routes(app: Flask) -> None:
                 results.append(prediction)
         return jsonify({"predictions": results, "count": len(results)})
 
+    # ── Measurement ingest ────────────────────────────────────────
     @app.post("/receive-data")
     def receive_data():
         payload = request.get_json(silent=True)
@@ -245,6 +276,7 @@ def register_routes(app: Flask) -> None:
         socketio.emit("batch_ingested", {"stored_count": stored})
         return jsonify({"success": True, "message": "batch stored", "stored_count": stored}), 201
 
+    # ── Aggregate statistics ──────────────────────────────────────
     @app.get("/get-stats")
     def get_stats():
         device_id = request.args.get("device_id", "").strip()
@@ -371,6 +403,7 @@ def register_routes(app: Flask) -> None:
             }
         )
 
+    # ── Per-device views ──────────────────────────────────────────
     @app.get("/device-stats")
     def device_stats():
         device_id = request.args.get("device_id", "").strip()
@@ -428,6 +461,7 @@ def register_routes(app: Flask) -> None:
             }
         )
 
+    # ── History + CSV export ──────────────────────────────────────
     @app.get("/api/history")
     def history():
         rows = _query_rows(
@@ -499,6 +533,7 @@ def register_routes(app: Flask) -> None:
             headers={"Content-Disposition": "attachment; filename=network-cell-data.csv"},
         )
 
+    # ── Handover, heatmap, tower clusters, neighbors ──────────────
     @app.get("/api/handover-stats")
     def handover_stats():
         device_id = request.args.get("device_id", "").strip()
@@ -682,6 +717,7 @@ def register_routes(app: Flask) -> None:
             operators=operators,
         )
 
+    # ── Speed test ────────────────────────────────────────────────
     @app.get("/api/speed-test/download")
     @app.get("/speedtest/download")
     def speed_test_download():
@@ -785,6 +821,7 @@ def register_routes(app: Flask) -> None:
             }
         )
 
+    # ── Diagnostics ───────────────────────────────────────────────
     @app.get("/api/diagnostics-summary")
     def diagnostics_summary():
         device_id = request.args.get("device_id", "").strip()
@@ -845,6 +882,7 @@ def register_routes(app: Flask) -> None:
         )
         return jsonify(_build_diagnostics_history(device_id, rows, speed_rows))
 
+    # ── PDF report ────────────────────────────────────────────────
     @app.get("/api/report.pdf")
     def export_pdf_report():
         rows = _query_rows(
@@ -866,6 +904,7 @@ def register_routes(app: Flask) -> None:
             headers={"Content-Disposition": "attachment; filename=network-report.pdf"},
         )
 
+    # ── Alert rules ───────────────────────────────────────────────
     @app.route("/api/alert-rules", methods=["GET", "POST"])
     def alert_rules():
         if request.method == "GET":
@@ -987,6 +1026,12 @@ def register_cli(app: Flask) -> None:
             raise click.Abort()
 
 
+# ══ Helpers ═══════════════════════════════════════════════════════════
+# The rest of this module is internal plumbing used by the routes above.
+# Grouped by responsibility; nothing below is imported elsewhere.
+
+# ── App bootstrap ─────────────────────────────────────────────────────
+
 def _ensure_instance_dir(app: Flask) -> None:
     instance_dir = app.config["SQLALCHEMY_DATABASE_URI"].removeprefix("sqlite:///")
     if instance_dir.endswith(".db"):
@@ -994,6 +1039,8 @@ def _ensure_instance_dir(app: Flask) -> None:
 
         Path(instance_dir).parent.mkdir(parents=True, exist_ok=True)
 
+
+# ── Ingest validation ─────────────────────────────────────────────────
 
 def _validate_payload(payload: dict) -> str | None:
     required_fields = (
@@ -1065,6 +1112,8 @@ def _validate_payload(payload: dict) -> str | None:
     return None
 
 
+# ── Timestamp + window parsing ────────────────────────────────────────
+
 def _parse_timestamp(value, timezone_name: str) -> datetime:
     if value in (None, ""):
         return datetime.now(timezone.utc)
@@ -1121,6 +1170,8 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc)
 
 
+# ── Auth tokens (itsdangerous) ────────────────────────────────────────
+
 def _get_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="network-cell-analyzer-auth")
 
@@ -1176,6 +1227,8 @@ def _extract_device_id_from_auth() -> str | None:
     return payload.get("device_id")
 
 
+# ── Request-param coercion ────────────────────────────────────────────
+
 def _get_time_filter(*names: str):
     for name in names:
         value = request.args.get(name)
@@ -1209,6 +1262,8 @@ def _clean_optional_string(value):
         return None
     return str(value).strip()
 
+
+# ── DB writers (device, cell, neighbors, realtime emit) ──────────────
 
 def _upsert_device_log(payload: dict) -> None:
     device_id = payload["device_id"].strip()
@@ -1298,6 +1353,8 @@ def _emit_realtime_updates(cell_record: CellData) -> None:
         recent_alert_events.appendleft(alert)
         socketio.emit("signal_alert", alert)
 
+
+# ── Query builders ────────────────────────────────────────────────────
 
 def _base_query(device_id=None, operator=None, network_type=None, require_location=False):
     query = CellData.query
@@ -1433,6 +1490,8 @@ def _accumulate_connectivity_time(
     return total_seconds
 
 
+# ── Stats formatting + payload assembly ──────────────────────────────
+
 def _format_percentage(value: float, total: float) -> str:
     return f"{round((value / total) * 100, 2)}%"
 
@@ -1530,6 +1589,8 @@ def _build_stats_payload(
     }
 
 
+# ── Device listing + pagination helpers ───────────────────────────────
+
 def _fetch_devices(active_window_minutes: int) -> list[dict]:
     now = datetime.now(timezone.utc)
     threshold = now - timedelta(minutes=active_window_minutes)
@@ -1584,6 +1645,8 @@ def _parse_grid_size(raw_value) -> int:
         return 3
     return max(1, min(value, 5))
 
+
+# ── Heatmap + tower-cluster aggregation ──────────────────────────────
 
 def _aggregate_heatmap_rows(rows: list[CellData], grid_size: int, max_points: int) -> list[dict]:
     grouped = defaultdict(list)
@@ -1730,6 +1793,8 @@ def _estimate_cluster_radius_m(centroid_lat: float, centroid_lng: float, rows: l
         return 0.0
     return round(max(distances), 1)
 
+
+# ── Diagnostics helpers ───────────────────────────────────────────────
 
 def _build_diagnostics_summary(device_id: str, rows: list[CellData], speed_rows: list[SpeedTestResult], neighbor_rows) -> dict:
     recent_rows = rows[-200:] if len(rows) > 200 else rows
@@ -1930,6 +1995,8 @@ def _label_for_reliability(score: int) -> str:
     return "Risky"
 
 
+# ── Speed-test + signal-quality prediction helpers ────────────────────
+
 def _store_speed_test_payload(payload: dict, timezone_name: str) -> tuple[dict, int]:
     required = ["device_id", "download_mbps", "upload_mbps"]
     missing = [field for field in required if payload.get(field) in (None, "")]
@@ -2041,6 +2108,8 @@ def _geo_distance_km(lat1, lon1, lat2, lon2) -> float:
     )
     return 6371 * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
 
+
+# ── Alerts, PDF report, SQLite migrations ─────────────────────────────
 
 def _evaluate_alerts(cell_record: CellData) -> list[dict]:
     rules = AlertRule.query.filter_by(is_enabled=True).all()

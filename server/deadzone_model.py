@@ -1,3 +1,27 @@
+"""Runtime wrapper around the trained dead-zone model bundle.
+
+Loads the joblib bundle written by ``deadzone_training.py`` (dual
+LightGBM regressor + classifier, plus tuned F1-max threshold and OOF
+calibration scalers) and exposes ``predict_deadzone(latitude=...,
+longitude=..., operator=..., network_type=...)`` for use by the Flask
+``/api/deadzone/predict`` endpoint.
+
+Because Flask and the Colab training environment may ship slightly
+different scikit-learn versions, this module is careful to pin to
+sklearn 1.6.1 transformer internals (see ``requirements.txt`` —
+``_RemainderColsList`` was renamed in 1.7+).
+
+References
+----------
+- joblib persistence best-practices:
+  https://joblib.readthedocs.io/en/latest/persistence.html
+- LightGBM prediction API:
+  https://lightgbm.readthedocs.io/en/stable/Python-API.html
+- SHAP TreeExplainer for per-prediction attributions:
+  Lundberg & Lee, "A Unified Approach to Interpreting Model
+  Predictions", NeurIPS 2017. https://github.com/shap/shap
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -99,6 +123,10 @@ OPERATOR_ALIASES = {
 
 _RUNTIME_CACHE: dict[str, object] = {"path": None, "mtime": None, "runtime": None}
 
+
+# ══ Runtime prediction objects ════════════════════════════════════════
+# `DeadzoneRuntime` owns the loaded model bundle; `DeadzonePrediction`
+# is the JSON-serialisable result handed back to the Flask endpoint.
 
 def group_model_key(operator: str, network_type: str) -> str:
     return f"{operator}::{network_type}"
@@ -466,6 +494,10 @@ class DeadzoneRuntime:
         return feature_row, int(len(nearest_rows)), float(predicted_signal)
 
 
+# ══ Normalisation + small utilities ═══════════════════════════════════
+# Canonicalise operator names, network types, numeric cell codes, and
+# derive human-readable reason strings from predicted signal + risk.
+
 def normalize_operator_name(value: str | None, mcc: str | None = None, mnc: str | None = None) -> str:
     mapped = LEBANON_OPERATOR_MAP.get((clean_code(mcc), clean_code(mnc)))
     if mapped:
@@ -567,6 +599,10 @@ def build_prediction_reasons(feature_row: dict, predicted_signal: float, risk: f
         reasons.append("model confidence is high because multiple weak indicators align")
     return reasons[:3]
 
+
+# ══ Reference-data loaders ════════════════════════════════════════════
+# OpenCelliD towers, Ookla speed-test tiles, OSM telecom context, and
+# DEM elevation grid — each normalised to a canonical DataFrame schema.
 
 def load_opencellid_reference(path: str | Path, bbox: tuple[float, float, float, float] | None = None) -> pd.DataFrame:
     path = Path(path)
@@ -992,6 +1028,10 @@ def filter_bbox(frame: pd.DataFrame, bbox: tuple[float, float, float, float]) ->
     ].copy()
 
 
+# ══ Training-dataset assembly + labelling ═════════════════════════════
+# Join app measurements with reference data, attach engineered features
+# (same-group, Ookla, OSM, DEM), then derive weak dead-zone labels.
+
 def build_training_dataset(
     reference_cells: pd.DataFrame,
     ookla_tiles: pd.DataFrame | None = None,
@@ -1231,6 +1271,9 @@ def filter_reference_scope(
     return frame.reset_index(drop=True)
 
 
+# ══ Legacy v2 trainer (RandomForest fallback) ═════════════════════════
+# Kept only so the `--v2` CLI flag keeps working for reproducibility.
+
 def train_model_variant(dataset: pd.DataFrame) -> tuple[Pipeline, dict]:
     if len(dataset) < 20:
         raise ValueError("Training dataset is too small after preprocessing. Provide more reference rows.")
@@ -1286,6 +1329,10 @@ def _load_generic_dataframe(path: str | Path) -> pd.DataFrame | None:
         return pd.read_csv(path, compression="gzip")
     return None
 
+
+# ══ Top-level training orchestrator (CLI entrypoint) ══════════════════
+# `train_deadzone_model` is what `flask retrain-model` calls. It wires
+# reference loading → dataset assembly → training → bundle persistence.
 
 def train_deadzone_model(
     opencellid_path: str | Path,
@@ -1412,6 +1459,10 @@ def train_deadzone_model(
 
     return {"model_path": str(output_model_path), "metrics": metadata["metrics"], "row_count": int(len(dataset))}
 
+
+# ══ v3 trainer (dual LightGBM + weak supervision) ═════════════════════
+# The production trainer: Snorkel-style weak labels → GroupKFold CV →
+# dual LightGBM (Huber regressor + binary classifier) → F1-max tuning.
 
 def _train_v3(
     opencellid_path: str | Path,
@@ -1745,6 +1796,8 @@ def _train_v3(
     }
 
 
+# ══ Split / pipeline / evaluation (v2 compatibility) ══════════════════
+
 def split_spatial_train_test(dataset: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     grouped = dataset.copy()
     grouped["lat_bin"] = (grouped["latitude"] * 20).round().astype(int)
@@ -1873,6 +1926,9 @@ def generate_eda_report(dataset: pd.DataFrame, metrics: dict, report_dir: str | 
     plt.close(figure)
 
 
+# ══ Public prediction entry points ════════════════════════════════════
+# `predict_deadzone(...)` is what Flask's `/api/deadzone/predict` calls.
+
 def get_deadzone_runtime(model_path: str | Path | None) -> DeadzoneRuntime | None:
     if not model_path:
         return None
@@ -1904,6 +1960,8 @@ def predict_deadzone(
         return None
     return runtime.predict(latitude=float(latitude), longitude=float(longitude), operator=operator, network_type=network_type)
 
+
+# ══ CLI surface ═══════════════════════════════════════════════════════
 
 def bbox_from_string(value: str | None) -> tuple[float, float, float, float] | None:
     if not value:
