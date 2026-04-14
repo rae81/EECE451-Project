@@ -337,8 +337,12 @@ def label_ookla_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def label_topology_rows(df: pd.DataFrame) -> pd.DataFrame:
-    """Label gap-fill rows from COST-231 physics estimates (Tier 3).
+def label_topology_rows(df: pd.DataFrame, rsrp_col: str = "cost231_predicted_rsrp") -> pd.DataFrame:
+    """Label gap-fill rows from a physics-model predicted RSRP column (Tier 3).
+
+    Accepts any RSRP column name via ``rsrp_col`` so callers can plug
+    in COST-231 (legacy), P.1812 (terrain-aware, preferred), or Sionna
+    RT (ray-traced, research-grade) labels.
 
     These labels are physics-model estimates, NOT real measurements.
     They receive the lowest sample_weight to reflect this uncertainty.
@@ -353,8 +357,8 @@ def label_topology_rows(df: pd.DataFrame) -> pd.DataFrame:
     df["sample_weight"] = TIER_WEIGHTS["topology"]
 
     rsrp = (
-        df["cost231_predicted_rsrp"]
-        if "cost231_predicted_rsrp" in df.columns
+        df[rsrp_col]
+        if rsrp_col in df.columns
         else pd.Series(np.nan, index=df.index)
     )
     # Cap to physically realistic range: COST-231 Hata is invalid
@@ -394,6 +398,9 @@ def build_training_dataset(
     opencellid_df: pd.DataFrame | None = None,
     h3_resolution: int = 9,
     include_topology: bool = True,
+    physics_backend: str = "cost231",
+    dem_df: pd.DataFrame | None = None,
+    sionna_rsrp_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Build training dataset from REAL measurements first.
 
@@ -566,12 +573,25 @@ def build_training_dataset(
                 else:
                     topo[col] = "Unknown"
 
-            # Compute COST-231 predicted RSRP for each gap-fill point
-            # using nearest tower from OpenCelliD — needed for labeling
+            # Compute physics-model predicted RSRP for each gap-fill
+            # point. Three backends:
+            #   - "cost231": legacy distance+frequency formula. LEAK-PRONE
+            #                because the formula is algebraically reproducible
+            #                from features already in the training matrix.
+            #   - "p1812":   ITU-R P.1812-simplified with real DEM terrain
+            #                profiles between tower and receiver (Bullington
+            #                diffraction). Uses information not encoded in
+            #                any single feature → breaks the circular leak.
+            #   - "sionna":  pre-computed ray-traced RSRP supplied via
+            #                ``sionna_rsrp_df``. Research-grade, requires
+            #                Sionna RT + CUDA.
             from deadzone_propagation import compute_propagation_features
+
             _q2 = np.radians(topo[["latitude", "longitude"]].values)
             _, _idx2 = _tree.query(_q2, k=1)
-            rsrp_vals = []
+
+            # Always compute COST-231 too — it remains as a FEATURE
+            cost_vals = []
             for j in range(len(topo)):
                 nr = opencellid_df.iloc[_idx2[j, 0]]
                 pf = compute_propagation_features(
@@ -583,11 +603,40 @@ def build_training_dataset(
                     float(nr["latitude"]),
                     float(nr["longitude"]),
                 )
-                rsrp_vals.append(pf["cost231_predicted_rsrp"])
-            topo["cost231_predicted_rsrp"] = rsrp_vals
+                cost_vals.append(pf["cost231_predicted_rsrp"])
+            topo["cost231_predicted_rsrp"] = cost_vals
 
-            parts.append(label_topology_rows(topo))
-            print(f"  Tier 3 (Gap-fill estimates): {len(parts[-1]):,} rows")
+            # Select labeling backend
+            rsrp_col = "cost231_predicted_rsrp"
+            if physics_backend == "p1812":
+                try:
+                    from deadzone_physics import compute_p1812_rsrp_batch
+                    p1812_res = compute_p1812_rsrp_batch(
+                        rx_points=topo, opencellid_df=opencellid_df,
+                        dem_df=dem_df,
+                    )
+                    topo["p1812_rsrp_dbm"] = p1812_res["p1812_rsrp_dbm"].values
+                    topo["p1812_distance_km"] = p1812_res["p1812_distance_km"].values
+                    topo["p1812_diffraction_loss_db"] = p1812_res[
+                        "p1812_diffraction_loss_db"].values
+                    rsrp_col = "p1812_rsrp_dbm"
+                    print(f"  Tier 3 labels: P.1812-simplified with DEM "
+                          f"(RSRP range {topo['p1812_rsrp_dbm'].min():.0f} .. "
+                          f"{topo['p1812_rsrp_dbm'].max():.0f} dBm)")
+                except Exception as e:
+                    print(f"  P.1812 backend failed ({e}), falling back to COST-231")
+            elif physics_backend == "sionna" and sionna_rsrp_df is not None:
+                if len(sionna_rsrp_df) == len(topo):
+                    topo["sionna_rsrp_dbm"] = sionna_rsrp_df[
+                        "sionna_rsrp_dbm"].values
+                    rsrp_col = "sionna_rsrp_dbm"
+                    print(f"  Tier 3 labels: Sionna RT ray-traced")
+                else:
+                    print("  Sionna rsrp_df length mismatch — using COST-231")
+
+            parts.append(label_topology_rows(topo, rsrp_col=rsrp_col))
+            print(f"  Tier 3 (Gap-fill, backend={physics_backend}): "
+                  f"{len(parts[-1]):,} rows")
 
     if not parts:
         return pd.DataFrame()
