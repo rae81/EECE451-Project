@@ -57,14 +57,69 @@ def download_berlin_v2x(
     cache_dir.mkdir(parents=True, exist_ok=True)
     local_path = cache_dir / "cellular_dataframe.parquet"
 
+    # HuggingFace hosts the dataset behind optional auth. Pick up a token
+    # from whichever env var the caller has set; all are common conventions.
+    hf_token = (
+        os.environ.get("hf")
+        or os.environ.get("HF_TOKEN")
+        or os.environ.get("HUGGINGFACE_TOKEN")
+        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    )
+    # On Colab, the user may have stored the token in userdata.
+    if not hf_token:
+        try:
+            from google.colab import userdata  # type: ignore
+            for key in ("hf", "HF_TOKEN", "HUGGINGFACE_TOKEN"):
+                try:
+                    hf_token = userdata.get(key)
+                    if hf_token:
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    # Prefer the official HuggingFace Hub client when available and we have
+    # a token: it resolves the canonical file path inside the dataset repo
+    # (avoids guessing the exact URL) and handles redirects and LFS links.
+    if not local_path.exists() or force:
+        if hf_token:
+            try:
+                from huggingface_hub import hf_hub_download
+                print("Downloading Berlin V2X via huggingface_hub (authenticated) ...")
+                for fname in (
+                    "cellular_dataframe.parquet",
+                    "data/cellular_dataframe.parquet",
+                ):
+                    try:
+                        resolved = hf_hub_download(
+                            repo_id="fraunhoferhhi/BerlinV2X",
+                            filename=fname,
+                            repo_type="dataset",
+                            token=hf_token,
+                            local_dir=str(cache_dir),
+                            local_dir_use_symlinks=False,
+                        )
+                        # Ensure the target path matches what we load later
+                        if Path(resolved).resolve() != local_path.resolve():
+                            import shutil
+                            shutil.copyfile(resolved, local_path)
+                        break
+                    except Exception as e:
+                        print(f"  hf_hub_download {fname!r}: {e}")
+                        continue
+            except ImportError:
+                print("huggingface_hub not installed; falling back to plain HTTP.")
+
     if not local_path.exists() or force:
         last_err: Optional[Exception] = None
         for url in BERLIN_V2X_PARQUET_URLS:
             print(f"Downloading Berlin V2X from {url} ...")
             try:
-                req = urllib.request.Request(
-                    url, headers={"User-Agent": "Mozilla/5.0 (deadzone-research)"}
-                )
+                headers = {"User-Agent": "Mozilla/5.0 (deadzone-research)"}
+                if hf_token:
+                    headers["Authorization"] = f"Bearer {hf_token}"
+                req = urllib.request.Request(url, headers=headers)
                 with urllib.request.urlopen(req, timeout=120) as resp, \
                         open(local_path, "wb") as out:
                     while True:
