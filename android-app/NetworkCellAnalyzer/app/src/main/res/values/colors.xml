@@ -1,97 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ── Brand / Primary ── -->
-    <color name="colorPrimary">#0F766E</color>
-    <color name="colorPrimaryDark">#0D5D57</color>
-    <color name="colorPrimaryLight">#14B8A6</color>
+    <!-- ── Brand / Primary (Indigo 600) ── -->
+    <color name="colorPrimary">#4F46E5</color>
+    <color name="colorPrimaryDark">#3730A3</color>
+    <color name="colorPrimaryLight">#818CF8</color>
     <color name="colorOnPrimary">#FFFFFF</color>
-    <color name="colorPrimaryVariant">#0E9384</color>
+    <color name="colorPrimaryVariant">#6366F1</color>
+    <color name="colorPrimaryContainer">#E0E7FF</color>
+    <color name="colorOnPrimaryContainer">#1E1B4B</color>
 
-    <!-- ── Secondary / Accent ── -->
-    <color name="colorSecondary">#F97316</color>
-    <color name="colorSecondaryDark">#C2410C</color>
+    <!-- ── Secondary / Accent (Coral / Rose) ── -->
+    <color name="colorSecondary">#F43F5E</color>
+    <color name="colorSecondaryDark">#BE123C</color>
     <color name="colorOnSecondary">#FFFFFF</color>
-    <color name="colorSecondaryVariant">#FB923C</color>
+    <color name="colorSecondaryVariant">#FB7185</color>
+    <color name="colorSecondaryContainer">#FFE4E6</color>
+    <color name="colorOnSecondaryContainer">#500724</color>
+
+    <!-- ── Tertiary (Teal) ── -->
+    <color name="colorTertiary">#0EA5E9</color>
+    <color name="colorOnTertiary">#FFFFFF</color>
 
     <!-- ── Surfaces ── -->
-    <color name="colorBackground">#F8FAFC</color>
+    <color name="colorBackground">#F6F7FB</color>
     <color name="colorSurface">#FFFFFF</color>
-    <color name="colorOnBackground">#0F172A</color>
-    <color name="colorOnSurface">#0F172A</color>
-    <color name="colorSurfaceVariant">#F1F5F9</color>
+    <color name="colorSurfaceContainer">#F1F3FA</color>
+    <color name="colorSurfaceContainerHigh">#EAEDF7</color>
+    <color name="colorOnBackground">#0B1020</color>
+    <color name="colorOnSurface">#0B1020</color>
+    <color name="colorSurfaceVariant">#EEF0F7</color>
+    <color name="colorOnSurfaceVariant">#44495C</color>
 
     <!-- ── Error ── -->
-    <color name="colorError">#DC2626</color>
+    <color name="colorError">#EF4444</color>
     <color name="colorOnError">#FFFFFF</color>
+    <color name="colorErrorContainer">#FEE2E2</color>
+    <color name="colorOnErrorContainer">#7F1D1D</color>
 
     <!-- ── Signal Quality ── -->
-    <color name="signalExcellent">#059669</color>
-    <color name="signalGood">#65A30D</color>
-    <color name="signalFair">#D97706</color>
-    <color name="signalPoor">#DC2626</color>
-    <color name="signalNoSignal">#94A3B8</color>
+    <color name="signalExcellent">#10B981</color>
+    <color name="signalGood">#84CC16</color>
+    <color name="signalFair">#F59E0B</color>
+    <color name="signalPoor">#EF4444</color>
+    <color name="signalNoSignal">#9CA3B4</color>
 
     <!-- ── Network Technology Badges ── -->
     <color name="badge2G">#92400E</color>
     <color name="badge3G">#166534</color>
-    <color name="badge4G">#1E40AF</color>
+    <color name="badge4G">#4F46E5</color>
     <color name="badge5G">#7C3AED</color>
     <color name="badgeUnknown">#6B7280</color>
     <color name="badgeText">#FFFFFF</color>
 
     <!-- ── Chart Palette ── -->
-    <color name="chartColor1">#0F766E</color>
-    <color name="chartColor2">#F97316</color>
-    <color name="chartColor3">#EAB308</color>
-    <color name="chartColor4">#22C55E</color>
+    <color name="chartColor1">#4F46E5</color>
+    <color name="chartColor2">#F43F5E</color>
+    <color name="chartColor3">#F59E0B</color>
+    <color name="chartColor4">#10B981</color>
     <color name="chartColor5">#8B5CF6</color>
-    <color name="chartColor6">#EF4444</color>
+    <color name="chartColor6">#0EA5E9</color>
 
-    <!-- ── Splash / Intro ── -->
-    <color name="splashStart">#042F2E</color>
-    <color name="splashEnd">#0C0A09</color>
+    <!-- ── Splash / Intro (deep indigo → night) ── -->
+    <color name="splashStart">#1E1B4B</color>
+    <color name="splashEnd">#0B1020</color>
 
     <!-- ── Status ── -->
-    <color name="statusActive">#059669</color>
-    <color name="statusInactive">#DC2626</color>
+    <color name="statusActive">#10B981</color>
+    <color name="statusInactive">#EF4444</color>
 
     <!-- ── Structural ── -->
-    <color name="cardStroke">#E2E8F0</color>
-    <color name="divider">#E2E8F0</color>
+    <color name="cardStroke">#E0E4EF</color>
+    <color name="divider">#E0E4EF</color>
+    <color name="outline">#B9C0D4</color>
 
     <!-- ── Text ── -->
-    <color name="textPrimary">#0F172A</color>
-    <color name="textSecondary">#64748B</color>
-    <color name="textHint">#94A3B8</color>
+    <color name="textPrimary">#0B1020</color>
+    <color name="textSecondary">#5A637A</color>
+    <color name="textHint">#9CA3B4</color>
     <color name="textWhite">#FFFFFF</color>
     <color name="textWhite60">#99FFFFFF</color>
     <color name="textWhite40">#66FFFFFF</color>
 
     <!-- ── Heatmap ── -->
-    <color name="heatmapStrong">#059669</color>
-    <color name="heatmapMedium">#EAB308</color>
-    <color name="heatmapWeak">#DC2626</color>
+    <color name="heatmapStrong">#10B981</color>
+    <color name="heatmapMedium">#F59E0B</color>
+    <color name="heatmapWeak">#EF4444</color>
     <color name="heatmapHudSurface">#F2FFFFFF</color>
-    <color name="heatmapHudSurfaceSecondary">#EAF8FAFC</color>
-    <color name="heatmapHudStroke">#66DCE6EF</color>
-    <color name="heatmapHudDivider">#59DCE6EF</color>
+    <color name="heatmapHudSurfaceSecondary">#EAF6F7FB</color>
+    <color name="heatmapHudStroke">#66D1D6E6</color>
+    <color name="heatmapHudDivider">#59D1D6E6</color>
 
-    <color name="pingPongWarning">#EA580C</color>
+    <color name="pingPongWarning">#F43F5E</color>
 
-    <!-- ── Hero / Navigation Surfaces ── -->
-    <color name="heroSurfaceStart">#042F2E</color>
-    <color name="heroSurfaceEnd">#0C1524</color>
-    <color name="heroSurfaceAccent">#FB923C</color>
-    <color name="navSurface">#F8FAFC</color>
-    <color name="navShadow">#0F172A</color>
+    <!-- ── Hero / Navigation Surfaces (indigo gradient) ── -->
+    <color name="heroSurfaceStart">#312E81</color>
+    <color name="heroSurfaceEnd">#1E1B4B</color>
+    <color name="heroSurfaceAccent">#F43F5E</color>
+    <color name="navSurface">#F6F7FB</color>
+    <color name="navShadow">#0B1020</color>
 
     <!-- ── Dead Zone Prediction ── -->
-    <color name="deadzoneHigh">#DC2626</color>
-    <color name="deadzoneMedium">#EA580C</color>
-    <color name="deadzoneLow">#059669</color>
-    <color name="deadzoneUnknown">#94A3B8</color>
+    <color name="deadzoneHigh">#EF4444</color>
+    <color name="deadzoneMedium">#F59E0B</color>
+    <color name="deadzoneLow">#10B981</color>
+    <color name="deadzoneUnknown">#9CA3B4</color>
 
     <!-- ── Bottom Navigation ── -->
     <color name="bottomNavSurface">#FFFFFF</color>
-    <color name="bottomNavIndicator">#CCFBF1</color>
+    <color name="bottomNavIndicator">#E0E7FF</color>
 </resources>
