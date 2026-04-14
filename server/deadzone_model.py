@@ -347,7 +347,7 @@ class DeadzoneRuntime:
             training_sample_count=int(metadata.get("training_row_count", 0)),
             nearest_sample_count=support_count,
             reasons=reasons,
-            model_source="deadzone-model",
+            model_source="deadzone-model-v3",
             model_variant=variant_name,
         ).to_dict()
 
