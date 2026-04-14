@@ -1,7 +1,24 @@
+"""Flask application configuration.
+
+Holds environment-driven settings for the Network Cell Analyzer server
+(database URI, token lifetimes, pagination caps, dead-zone model path).
+
+Follows the standard Flask config-object pattern documented in the Flask
+docs and popularised by Miguel Grinberg's Flask Mega-Tutorial:
+    https://flask.palletsprojects.com/en/3.0.x/config/
+    https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iii-web-forms
+
+Every setting has an env-var override so the same image can run in dev,
+CI, and production without code changes.
+"""
+
 import os
 from pathlib import Path
 
 
+# ── Paths ─────────────────────────────────────────────────────────────
+# BASE_DIR points at the ``server/`` directory so instance-relative paths
+# (SQLite DB, trained ML bundle) resolve the same way regardless of cwd.
 BASE_DIR = Path(__file__).resolve().parent
 
 

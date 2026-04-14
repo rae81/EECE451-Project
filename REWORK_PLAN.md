@@ -96,8 +96,13 @@ Every swap will carry an inline comment of the form:
 
 ## Phases
 
-1. **Phase 1 — Cleanup.** Done on disk; will commit alongside this plan.
-2. **Phase 2 — Organisation and citations (no behaviour change).** Single commit per top-level folder (`server/`, `android-app/`).
-3. **Phase 3 — Open-source swaps for extras.** One commit per swap so each is reviewable independently.
+1. **Phase 1 — Cleanup.** ✅ Done. Root now contains only `server/`, `android-app/`, `ref/`, `reference/`, `README.md`, `REWORK_PLAN.md`, `.gitignore`.
+2. **Phase 2 — Organisation and citations (no behaviour change).** ✅ Done.
+   - **Server:** module docstrings + route-group / helper-group section headers in `app.py`, `config.py`, `gunicorn.conf.py`, `models.py`, `deadzone_model.py`; extra section headers in `deadzone_explain.py` and `deadzone_transfer.py`. All other `deadzone_*.py` were already well-sectioned from prior work.
+   - **Android:** class-level Javadoc with library citations on `CellInfoHelper`, `CellMonitorService`, `ApiService`, `AuthInterceptor`, `RetrofitClient`, `MainActivity`, `LoginActivity`, `SplashActivity`, `NetworkAnalyzerApp`, `HistoryFragment`, `DiagnosticsFragment`, `HeatmapFragment`, `SettingsFragment`, `TowerClustersFragment`, `TowerClusterDetailFragment`, `DashboardFragment`, `AdaptiveMonitoringEngine`, `Constants`, `NetworkIdentityHelper`, `ExportHelper`, `OfflineSyncWorker`, `SpeedTestFragment` (citations extended). Remaining classes already had Javadoc from prior work.
+3. **Phase 3 — Open-source integration for extras.**
+   - **Scope narrowed** per in-session user direction: model-related files (`deadzone_*.py`) are **not** swapped — the trained model and its runtime wrapper are kept as-is and only labelled / organised. That removes the previously planned Haversine → `geopy.distance.geodesic` and H3-helper swaps.
+   - **Completed as citation-only** (the existing code already follows the open-source pattern it cites, so no code swap was needed): `ExportHelper` (RFC 4180 + iText 7), `HeatmapFragment` (Leaflet + Leaflet.heat + OSM tile policy), `SpeedTestFragment` (speedtest-cli / Cloudflare speedtest client pattern), `DashboardFragment` / `StatisticsFragment` (MPAndroidChart).
+   - **Deferred:** larger-scale Java refactors (e.g., wholesale HeatmapFragment rewrite on top of a native heatmap lib) would require adding new Gradle dependencies and full build-verification on device; flagged for a later pass.
 
 Each phase ends with: app builds, server tests pass, prediction smoke test on Beirut unchanged.
