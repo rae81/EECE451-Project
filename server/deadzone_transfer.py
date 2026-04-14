@@ -192,13 +192,38 @@ def get_berlin_opencellid(cache_dir: str | Path = "./data/raw") -> pd.DataFrame:
     cache_dir = Path(cache_dir)
     path = cache_dir / "opencellid_berlin_262.csv.gz"
     if path.exists():
-        df = pd.read_csv(path, compression="gzip")
+        # OpenCelliD distributes the per-country CSV without a header,
+        # in the fixed order
+        #   radio,mcc,net,area,cell,unit,lon,lat,range,samples,
+        #   changeable,created,updated,averageSignal
+        # Some mirrors add a header row; auto-detect by peeking at row 0.
+        peek = pd.read_csv(path, compression="gzip", nrows=1, header=None)
+        first = str(peek.iloc[0, 0]).strip().lower()
+        header = 0 if first in {"radio", "mcc"} else None
+        if header is None:
+            cols = [
+                "radio", "mcc", "net", "area", "cell", "unit",
+                "lon", "lat", "range", "samples",
+                "changeable", "created", "updated", "averageSignal",
+            ]
+            df = pd.read_csv(path, compression="gzip", header=None, names=cols)
+        else:
+            df = pd.read_csv(path, compression="gzip")
         rename = {"lat": "latitude", "lon": "longitude"}
         for s, d in rename.items():
             if s in df.columns and d not in df.columns:
                 df = df.rename(columns={s: d})
+        df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+        df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+        df = df.dropna(subset=["latitude", "longitude"])
         df = df[(df["latitude"] > 52.3) & (df["latitude"] < 52.7) &
                  (df["longitude"] > 13.1) & (df["longitude"] < 13.8)]
+        # Fill the optional columns the feature pipeline expects
+        if "range" not in df.columns:
+            df["range"] = 2000
+        df["operator"] = df.get("net", pd.Series(["Unknown"] * len(df))).astype(str)
+        df["network_type"] = df.get("radio", pd.Series(["4G"] * len(df))).astype(str)
+        df["frequency_band"] = "LTE_1800"
         return df.reset_index(drop=True)
 
     # Synthetic fallback: a 10 x 10 grid over Berlin (~2 km spacing)
