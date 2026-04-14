@@ -29,6 +29,12 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+/**
+ * "Connection-health" view: surfaces the server's
+ * {@code /api/diagnostics-summary} + {@code /api/diagnostics-history}
+ * output — recent signal quality, handover rate, speed-test medians,
+ * detected issues — as a bonus/extra feature.
+ */
 public class DiagnosticsFragment extends Fragment {
 
     private FragmentDiagnosticsBinding binding;

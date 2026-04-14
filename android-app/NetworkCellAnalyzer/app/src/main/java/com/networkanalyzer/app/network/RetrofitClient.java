@@ -34,6 +34,20 @@ import retrofit2.converter.gson.GsonConverterFactory;
  *   <li>Dynamic base URL support (reads from SharedPreferences)</li>
  * </ul>
  */
+/**
+ * Singleton factory for the Retrofit-backed {@link ApiService}.
+ * <p>
+ * Wires an OkHttp client with a timeout profile sized for mobile
+ * networks and attaches the {@link AuthInterceptor} so every outgoing
+ * request carries a fresh bearer token.
+ * <p>
+ * References:
+ * <ul>
+ *   <li>Retrofit: https://square.github.io/retrofit/
+ *   <li>OkHttp:   https://square.github.io/okhttp/
+ *   <li>Retrofit converter-gson: https://github.com/square/retrofit/tree/master/retrofit-converters/gson
+ * </ul>
+ */
 public class RetrofitClient {
 
     private static final String TAG = "RetrofitClient";

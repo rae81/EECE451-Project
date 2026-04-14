@@ -28,6 +28,16 @@ import okhttp3.Response;
  * - If the refresh fails, clears all stored tokens so the user must re-login.
  * - Token refresh is synchronized to prevent concurrent refresh attempts.
  */
+/**
+ * OkHttp interceptor that attaches the current access token to outgoing
+ * requests and transparently refreshes it on a 401 response.
+ * <p>
+ * Implements the classic "authenticator" pattern from the OkHttp
+ * documentation — see
+ * https://square.github.io/okhttp/features/interceptors/ — without
+ * using {@link okhttp3.Authenticator} because the server uses signed
+ * {@code itsdangerous} tokens rather than HTTP challenge/response.
+ */
 public class AuthInterceptor implements Interceptor {
 
     private static final String TAG = "AuthInterceptor";

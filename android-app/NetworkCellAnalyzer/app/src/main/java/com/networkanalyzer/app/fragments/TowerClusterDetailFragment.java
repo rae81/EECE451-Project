@@ -21,6 +21,11 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+/**
+ * Drill-down view for a single tower cluster — sample readings,
+ * centroid, radius, dominant network type — served by
+ * {@code /api/tower-clusters/detail}.
+ */
 public class TowerClusterDetailFragment extends Fragment {
 
     private FragmentTowerClusterDetailBinding binding;

@@ -28,6 +28,12 @@ import com.networkanalyzer.app.utils.PreferenceManager;
  * manifest so that the system window has no action bar.
  */
 @SuppressLint("CustomSplashScreen")
+/**
+ * Launcher activity — shows a short fade animation, then routes the
+ * user to {@link LoginActivity} or {@link MainActivity} depending on
+ * whether a valid access/refresh token is cached in
+ * {@link com.networkanalyzer.app.utils.PreferenceManager}.
+ */
 public class SplashActivity extends AppCompatActivity {
 
     /** Duration the splash screen remains visible before navigation (ms). */

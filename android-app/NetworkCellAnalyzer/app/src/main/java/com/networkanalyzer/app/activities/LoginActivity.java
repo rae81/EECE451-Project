@@ -45,6 +45,15 @@ import retrofit2.Response;
  * If biometric login was previously enabled, a fingerprint / face prompt is
  * offered as an alternative to password entry.
  */
+/**
+ * Sign-in / sign-up screen. Talks to the Flask server's {@code
+ * /auth/login}, {@code /auth/register}, and {@code /auth/refresh}
+ * endpoints and persists the resulting tokens in
+ * {@link com.networkanalyzer.app.utils.PreferenceManager}.
+ * <p>
+ * Optional biometric unlock is backed by AndroidX Biometric — see
+ * https://developer.android.com/jetpack/androidx/releases/biometric .
+ */
 public class LoginActivity extends AppCompatActivity {
 
     private static final String TAG = "LoginActivity";

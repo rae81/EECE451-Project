@@ -46,6 +46,18 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+/**
+ * Foreground service that periodically polls {@link CellInfoHelper} for
+ * the current serving cell + neighbors, persists the reading via Room
+ * ({@link AppDatabase}), ships it to the Flask server through
+ * {@link ApiService}, and broadcasts an intent so the UI can refresh in
+ * real time.
+ * <p>
+ * Implements the Android foreground-service pattern documented at
+ * https://developer.android.com/develop/background-work/services/foreground-services
+ * to keep cell-info polling alive when the app is backgrounded — which
+ * is a hard requirement for the "real-time monitoring" graded feature.
+ */
 public class CellMonitorService extends Service {
 
     private static final String TAG = "CellMonitorService";

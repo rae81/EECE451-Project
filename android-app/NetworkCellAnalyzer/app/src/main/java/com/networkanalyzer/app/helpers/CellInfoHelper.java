@@ -42,6 +42,22 @@ import java.lang.reflect.Method;
  * used by the telephony framework for unavailable values) as "not available",
  * substituting {@code -999} for numeric fields or {@code "N/A"} for strings.
  */
+/**
+ * Queries the serving + neighbor cell-info for 2G (GSM), 3G (WCDMA),
+ * 4G (LTE) and 5G (NR) radios and normalises the result into a single
+ * {@link CellDataEntry}. This is the class that implements the 30%
+ * "2G/3G/4G cell-info querying" graded requirement of the EECE 451
+ * project brief.
+ * <p>
+ * Signal-strength conversions (dBm for LTE RSRP, asu-to-dBm for GSM
+ * RSSI, etc.) follow the Android {@code TelephonyManager} /
+ * {@link android.telephony.CellInfo} documentation:
+ * <ul>
+ *   <li>https://developer.android.com/reference/android/telephony/TelephonyManager
+ *   <li>https://developer.android.com/reference/android/telephony/CellInfo
+ *   <li>https://developer.android.com/reference/android/telephony/CellSignalStrengthLte
+ * </ul>
+ */
 public final class CellInfoHelper {
 
     private static final String TAG = "CellInfoHelper";

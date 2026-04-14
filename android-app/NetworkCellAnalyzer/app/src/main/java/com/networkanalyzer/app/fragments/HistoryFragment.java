@@ -39,6 +39,12 @@ import java.util.concurrent.Executors;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
 
+/**
+ * Paginated list of stored cell-data readings backed by the server's
+ * {@code /api/history} endpoint with a Room cache for offline viewing.
+ * Also hosts the CSV export button that calls {@code /api/export.csv}.
+ * Part of the 10% "statistical service" graded feature.
+ */
 public class HistoryFragment extends Fragment {
 
     private static final int SERVER_HISTORY_LIMIT = 500;

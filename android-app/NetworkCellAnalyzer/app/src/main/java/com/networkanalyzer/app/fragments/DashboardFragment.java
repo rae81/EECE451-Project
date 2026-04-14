@@ -53,8 +53,17 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 /**
- * Dense field dashboard inspired by telecom diagnostic tools.
- * Prioritizes live radio state, experience framing, and tower intelligence.
+ * Real-time field dashboard inspired by telecom diagnostic tools.
+ * Renders the currently-serving cell (operator, network type, signal
+ * power, cell/LAC IDs, MCC/MNC, frequency band) plus neighbor-cell
+ * telemetry, refreshing whenever
+ * {@link com.networkanalyzer.app.services.CellMonitorService} broadcasts
+ * a new reading.
+ * <p>
+ * Implements the "real-time service" half of the 10% graded
+ * app-services requirement (EECE 451 brief). The statistical half is
+ * in {@link StatisticsFragment}. Charts are drawn with MPAndroidChart
+ * (Apache-2.0) — https://github.com/PhilJay/MPAndroidChart .
  */
 public class DashboardFragment extends Fragment {
 

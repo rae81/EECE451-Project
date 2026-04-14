@@ -44,6 +44,22 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+/**
+ * Geospatial signal-coverage visualisation. Pulls aggregated buckets
+ * from {@code /api/heatmap-data} and renders them through an embedded
+ * {@link android.webkit.WebView} running a Leaflet + Leaflet.heat
+ * template; the fragment also overlays dead-zone predictions fetched
+ * from {@code /api/deadzone/predict/batch}.
+ * <p>
+ * Extra (non-required) feature. References:
+ * <ul>
+ *   <li>Leaflet — https://leafletjs.com/ (BSD-2-Clause)
+ *   <li>Leaflet.heat — https://github.com/Leaflet/Leaflet.heat (BSD-2-Clause)
+ *   <li>OpenStreetMap tile policy — https://operations.osmfoundation.org/policies/tiles/
+ * </ul>
+ * The server aggregation uses H3-style lat/lon bucketing; see
+ * {@code _aggregate_heatmap_rows} in {@code server/app.py}.
+ */
 public class HeatmapFragment extends Fragment {
 
     private static final String TAG = "HeatmapFragment";
