@@ -19,6 +19,11 @@ import com.networkanalyzer.app.databinding.FragmentSettingsBinding;
 import com.networkanalyzer.app.network.RetrofitClient;
 import com.networkanalyzer.app.utils.PreferenceManager;
 
+/**
+ * User-preference screen: toggles for background monitoring, alert
+ * thresholds, server base URL, and sign-out. Writes through
+ * {@link PreferenceManager}.
+ */
 public class SettingsFragment extends Fragment {
 
     private FragmentSettingsBinding binding;

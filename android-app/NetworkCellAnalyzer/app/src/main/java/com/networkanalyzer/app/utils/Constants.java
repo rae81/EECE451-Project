@@ -1,5 +1,12 @@
 package com.networkanalyzer.app.utils;
 
+/**
+ * Central registry of string/integer constants shared across the app:
+ * notification-channel IDs, broadcast-intent actions, shared-prefs
+ * keys, request-code constants, and default tuning parameters.
+ * <p>
+ * Non-instantiable; all members are {@code public static final}.
+ */
 public final class Constants {
 
     private Constants() {}

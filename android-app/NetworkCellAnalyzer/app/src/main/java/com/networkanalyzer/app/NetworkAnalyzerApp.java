@@ -9,6 +9,12 @@ import com.networkanalyzer.app.services.OfflineSyncWorker;
 import com.networkanalyzer.app.utils.Constants;
 import com.networkanalyzer.app.utils.PreferenceManager;
 
+/**
+ * Application subclass — bootstraps app-wide state at process start:
+ * creates notification channels (Android 8+), schedules the
+ * {@link com.networkanalyzer.app.services.OfflineSyncWorker}
+ * WorkManager job, and primes {@link PreferenceManager}.
+ */
 public class NetworkAnalyzerApp extends Application {
 
     @Override

@@ -4,6 +4,15 @@ import androidx.annotation.NonNull;
 
 import java.util.Deque;
 
+/**
+ * Adapts the {@link com.networkanalyzer.app.services.CellMonitorService}
+ * polling cadence based on how rapidly the signal is changing — polls
+ * faster on volatile links, slower on stable ones — so battery usage
+ * scales with measurement value.
+ * <p>
+ * Stateless utility class; all methods are pure functions of a rolling
+ * window of recent samples.
+ */
 public final class AdaptiveMonitoringEngine {
 
     private AdaptiveMonitoringEngine() {

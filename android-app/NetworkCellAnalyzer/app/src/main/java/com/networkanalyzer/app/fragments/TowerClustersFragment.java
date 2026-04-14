@@ -28,6 +28,12 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+/**
+ * Displays the top-N cell-tower clusters detected by the server
+ * ({@code /api/tower-clusters}), grouped by proximity + operator /
+ * network-type. Extra (non-required) feature — clustering is done
+ * server-side in {@code _build_tower_clusters} in {@code app.py}.
+ */
 public class TowerClustersFragment extends Fragment {
 
     private FragmentTowerClustersBinding binding;

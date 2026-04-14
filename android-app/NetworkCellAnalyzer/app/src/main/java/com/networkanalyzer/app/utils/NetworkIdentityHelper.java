@@ -15,6 +15,13 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Locale;
 
+/**
+ * Resolves device-level network identifiers (local IPv4 address, MAC
+ * address of the preferred interface) that the Android client reports
+ * to the server on each heartbeat. Follows the non-deprecated
+ * {@link java.net.NetworkInterface} API because
+ * {@code WifiInfo#getMacAddress()} has been locked down since Android 6.
+ */
 public final class NetworkIdentityHelper {
 
     private static final String[] PREFERRED_INTERFACES = {

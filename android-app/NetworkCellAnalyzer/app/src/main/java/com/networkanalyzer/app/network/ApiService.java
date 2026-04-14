@@ -30,6 +30,17 @@ import retrofit2.http.Streaming;
 /**
  * Retrofit API interface defining all network endpoints for the NetworkCellAnalyzer server.
  */
+/**
+ * Retrofit interface describing every REST endpoint the Android client
+ * calls on the Flask server (auth, measurement ingest, stats, heatmap,
+ * diagnostics, speed-test, dead-zone predictions).
+ * <p>
+ * The server-side counterparts live in {@code server/app.py} under the
+ * matching route-group section headers.
+ * <p>
+ * Retrofit annotation reference:
+ * https://square.github.io/retrofit/
+ */
 public interface ApiService {
 
     // ---- Authentication ----
