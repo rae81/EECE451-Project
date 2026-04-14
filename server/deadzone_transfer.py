@@ -149,20 +149,48 @@ def download_berlin_v2x(
 
     df = pd.read_parquet(local_path)
 
-    # Normalize column names (Berlin V2X has slight variations across releases)
+    # Normalize column names. Berlin V2X uses Latitude / Longitude and
+    # per-cell columns such as PCell_RSRP_max / PCell_RSRP_avg; different
+    # releases pick slightly different names, so we resolve them by
+    # pattern rather than a hard-coded list.
     rename = {}
     for src, dst in [
         ("Latitude", "latitude"), ("lat", "latitude"), ("LATITUDE", "latitude"),
         ("Longitude", "longitude"), ("lng", "longitude"), ("lon", "longitude"),
         ("LONGITUDE", "longitude"),
-        ("RSRP", "rsrp"), ("rsrp_dbm", "rsrp"),
-        ("RSRQ", "rsrq"),
-        ("SINR", "sinr"), ("RSSNR", "sinr"),
         ("Timestamp", "timestamp"), ("time", "timestamp"),
     ]:
         if src in df.columns and dst not in df.columns:
             rename[src] = dst
     df = df.rename(columns=rename)
+
+    # Pick the best available RSRP column: prefer the primary-cell max /
+    # average, fall back to any column containing 'RSRP'.
+    if "rsrp" not in df.columns:
+        rsrp_candidates = [
+            "PCell_RSRP_max", "PCell_RSRP_avg", "PCell_RSRP",
+            "RSRP", "rsrp_dbm",
+        ]
+        picked = next((c for c in rsrp_candidates if c in df.columns), None)
+        if picked is None:
+            picked = next(
+                (c for c in df.columns if "rsrp" in c.lower()), None
+            )
+        if picked is not None:
+            df = df.rename(columns={picked: "rsrp"})
+
+    # Same treatment for RSRQ / SINR (used diagnostically only)
+    if "rsrq" not in df.columns:
+        picked = next((c for c in df.columns if "rsrq" in c.lower()), None)
+        if picked is not None:
+            df = df.rename(columns={picked: "rsrq"})
+    if "sinr" not in df.columns:
+        picked = next(
+            (c for c in df.columns if "sinr" in c.lower() or "rssnr" in c.lower()),
+            None,
+        )
+        if picked is not None:
+            df = df.rename(columns={picked: "sinr"})
 
     # Keep rows with valid coordinates and RSRP
     keep = pd.Series(True, index=df.index)
