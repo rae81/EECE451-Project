@@ -30,11 +30,14 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-# Berlin V2X public data — the repo exposes a processed parquet
-BERLIN_V2X_PARQUET_URL = (
-    "https://github.com/fraunhoferhhi/BerlinV2X/releases/download/"
-    "v1.0/cellular_dataframe.parquet"
-)
+# Berlin V2X public data. The dataset is distributed via IEEE DataPort
+# (login required) and mirrored on HuggingFace. We try the HuggingFace
+# mirror first because it allows unauthenticated HTTP download.
+BERLIN_V2X_PARQUET_URLS = [
+    # HuggingFace mirror of the published cellular dataframe
+    "https://huggingface.co/datasets/fraunhoferhhi/BerlinV2X/resolve/main/cellular_dataframe.parquet",
+    "https://huggingface.co/datasets/fraunhoferhhi/BerlinV2X/resolve/main/data/cellular_dataframe.parquet",
+]
 
 
 def download_berlin_v2x(
@@ -55,16 +58,39 @@ def download_berlin_v2x(
     local_path = cache_dir / "cellular_dataframe.parquet"
 
     if not local_path.exists() or force:
-        print(f"Downloading Berlin V2X from {BERLIN_V2X_PARQUET_URL} ...")
-        try:
-            urllib.request.urlretrieve(BERLIN_V2X_PARQUET_URL, local_path)
-        except Exception as e:
+        last_err: Optional[Exception] = None
+        for url in BERLIN_V2X_PARQUET_URLS:
+            print(f"Downloading Berlin V2X from {url} ...")
+            try:
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "Mozilla/5.0 (deadzone-research)"}
+                )
+                with urllib.request.urlopen(req, timeout=120) as resp, \
+                        open(local_path, "wb") as out:
+                    while True:
+                        chunk = resp.read(1 << 20)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                if local_path.exists():
+                    try:
+                        local_path.unlink()
+                    except Exception:
+                        pass
+                print(f"  -> failed ({e}); trying next mirror if available")
+        if last_err is not None:
             raise RuntimeError(
-                f"Failed to download Berlin V2X parquet: {e}. "
-                "Manual download from https://github.com/fraunhoferhhi/BerlinV2X "
-                "required — place cellular_dataframe.parquet in "
-                f"{cache_dir}"
-            ) from e
+                f"Failed to download Berlin V2X parquet from any mirror: "
+                f"{last_err}. Manual download is required: fetch "
+                "cellular_dataframe.parquet from IEEE DataPort "
+                "(https://ieee-dataport.org/open-access/berlin-v2x) or the "
+                "Fraunhofer HHI HuggingFace mirror and place it at "
+                f"{local_path}"
+            ) from last_err
 
     df = pd.read_parquet(local_path)
 

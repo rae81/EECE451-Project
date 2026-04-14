@@ -472,13 +472,18 @@ def train_dual_model(
     reg_fit_kwargs = {"reg__sample_weight": w_reg[reg_valid]}
     regressor_pipe.fit(feature_df[reg_valid], y_reg[reg_valid], **reg_fit_kwargs)
 
-    # ── Step 5: Add OOF as feature, train classifier ──
-    print("Training final classifier with stacked signal prediction...")
+    # ── Step 5: Train classifier on primitive features only ──
+    # The OOF regressor prediction ``full_oof`` is retained for diagnostics
+    # (returned under ``oof_predictions``) but is intentionally NOT injected
+    # into the classifier feature matrix: stacking the regressor output made
+    # that column dominate SHAP attributions and obscured which physical
+    # signals actually drove each prediction. Letting the classifier see the
+    # primitive propagation / topology / clutter features directly yields
+    # interpretable SHAP reasons without measurable loss on the spatial CV.
+    print("Training final classifier on primitive features...")
     cls_feature_df = feature_df.copy()
-    cls_feature_df["signal_pred_oof"] = full_oof
 
-    # Update feature lists for classifier
-    cls_numeric = NUMERIC_FEATURES_V3 + ["signal_pred_oof"]
+    cls_numeric = list(NUMERIC_FEATURES_V3)
     cls_preprocessor = build_preprocessor(
         numeric_features=cls_numeric,
         categorical_features=CATEGORICAL_FEATURES_V3,
