@@ -13,6 +13,11 @@ instance/
 !instance/ml/reports/*.json
 !instance/ml/reports/*.png
 
+# Local Flask SQLite dev database; never commit to git.
+instance/*.db
+instance/*.sqlite
+instance/*.sqlite3
+
 # Large external transfer datasets stay out of the repo; they live on
 # Drive and are copied into DATA_DIR at notebook runtime (section 0e).
 cellular_dataframe.parquet
