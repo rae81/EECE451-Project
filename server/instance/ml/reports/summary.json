@@ -1,0 +1,108 @@
+{
+  "trained_at": "2026-04-14T13:26:49.172846+00:00",
+  "model_version": 3,
+  "training_rows": 4701,
+  "deadzone_rate": 0.05488194001276324,
+  "measured_label_pct": 0.6171027440970006,
+  "metrics": {
+    "regressor": {
+      "rmse": 11.493273240500496,
+      "mae": 8.208271396793949,
+      "r2": 0.618163312260513,
+      "median_ae": 5.5683738358430475
+    },
+    "classifier": {
+      "accuracy": 0.9863858753456711,
+      "roc_auc": 0.9984044232980369,
+      "pr_auc": 0.9649910733361603,
+      "precision": 0.803125,
+      "recall": 0.9961240310077519,
+      "f1": 0.889273356401384
+    },
+    "classifier_tier_ookla": {
+      "pr_auc": 1.0,
+      "count": 2901,
+      "positive_rate": 0.04205446397793864
+    },
+    "classifier_tier_topology": {
+      "pr_auc": 0.9321462151638722,
+      "count": 1800,
+      "positive_rate": 0.07555555555555556
+    },
+    "spatial_cv_pr_auc": 0.09928472584547404,
+    "spatial_cv_folds": [
+      {
+        "fold": 0,
+        "train_size": 2878,
+        "test_size": 1567,
+        "score": 0.05294248664745593
+      },
+      {
+        "fold": 1,
+        "train_size": 2799,
+        "test_size": 1567,
+        "score": 0.15941127605722905
+      },
+      {
+        "fold": 2,
+        "train_size": 2899,
+        "test_size": 1567,
+        "score": 0.08550041483173716
+      }
+    ]
+  },
+  "reg_params": {
+    "objective": "huber",
+    "n_estimators": 500,
+    "max_depth": 7,
+    "learning_rate": 0.05,
+    "num_leaves": 47,
+    "min_child_samples": 15,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.1,
+    "reg_lambda": 1.0,
+    "random_state": 42,
+    "verbose": -1,
+    "n_jobs": -1
+  },
+  "cls_params": {
+    "objective": "binary",
+    "n_estimators": 500,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "min_child_samples": 20,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.1,
+    "reg_lambda": 1.0,
+    "scale_pos_weight": 17.22,
+    "random_state": 42,
+    "verbose": -1,
+    "n_jobs": -1
+  },
+  "transfer_metrics_berlin_v2x": {
+    "n_samples": 2999,
+    "rsrp_rmse": 12.186458512679492,
+    "rsrp_mae": 9.741005874190598,
+    "rsrp_r2": -0.02346082822863438,
+    "cls_accuracy": 0.9569856618872957,
+    "cls_roc_auc": 0.5537814331631689,
+    "cls_pr_auc": 0.0479552292624686,
+    "dead_rate": 0.043014338112704234
+  },
+  "ookla_agreement_lebanon": {
+    "n_samples": 2901,
+    "ookla_slow_rate": 0.027576697690451568,
+    "agreement_roc_auc": 0.4862127791563275,
+    "agreement_pr_auc": 0.027113537251883535,
+    "binary_agreement": 0.9627714581178903,
+    "true_positive_rate": 0.0125,
+    "false_positive_rate": 0.010280042538107055
+  },
+  "tier_counts": {
+    "ookla": 2901,
+    "topology": 1800
+  }
+}

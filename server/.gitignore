@@ -3,3 +3,20 @@ instance/
 .venv/
 *.pyc
 
+# Keep the shipped model bundle + training reports in git so deployments
+# have a ready-to-serve model without re-running training.
+!instance/
+!instance/ml/
+!instance/ml/deadzone_model.joblib
+!instance/ml/prepared_deadzone_dataset.csv
+!instance/ml/reports/
+!instance/ml/reports/*.json
+!instance/ml/reports/*.png
+
+# Large external transfer datasets stay out of the repo; they live on
+# Drive and are copied into DATA_DIR at notebook runtime (section 0e).
+cellular_dataframe.parquet
+opencellid_berlin_262.csv.gz
+EECE451_DeadZone*.zip
+_drive_tmp/
+
