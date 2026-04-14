@@ -243,7 +243,7 @@ def compute_transfer_features(
             ookla_df=None,
             dem_lats=None, dem_lons=None, dem_elevations=None,
             osm_telecom_df=None, osm_buildings_df=None, osm_roads_df=None,
-            coastline_df=None, app_h3_aggregates={},
+            coast_df=None, h3_aggregates={},
         )
 
     # Normalize measurement frame to the shape build_feature_dataframe expects
