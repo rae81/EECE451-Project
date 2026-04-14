@@ -12,6 +12,6 @@ optuna>=3.6.0
 pandas==3.0.1
 pyarrow==23.0.1
 reportlab==4.4.0
-scikit-learn==1.8.0
+scikit-learn==1.6.1
 shap>=0.45.0
 simple-websocket==1.1.0
