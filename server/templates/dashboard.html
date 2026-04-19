@@ -205,7 +205,7 @@
             <p>Direct endpoints used by the Android client and grading demo.</p>
           </div>
           <div class="quick-links">
-            <a class="quick-link-card" href="/get-stats/avg-all"><strong>Cross-device stats</strong><p>Aggregate radio statistics across all reporting devices.</p></a>
+            <a class="quick-link-card" href="/api/stats/fleet"><strong>Cross-device stats</strong><p>Aggregate radio statistics across all reporting devices.</p></a>
             <a class="quick-link-card" href="/api/history"><strong>History API</strong><p>Backend-first record stream consumed by the Android history screen.</p></a>
             <a class="quick-link-card" href="/api/heatmap-data"><strong>Heatmap JSON</strong><p>Server-side spatial aggregation for the coverage view.</p></a>
             <a class="quick-link-card" href="/api/speed-test/stats"><strong>Speed test stats</strong><p>Backhaul measurement history and averages.</p></a>
@@ -251,7 +251,7 @@
                     {{ 'Active' if device.is_active else 'Idle' }}
                   </span>
                 </td>
-                <td><a class="pill" href="/device-stats?device_id={{ device.device_id }}">Open</a></td>
+                <td><a class="pill" href="/device/overview?device_id={{ device.device_id }}">Open</a></td>
               </tr>
               {% else %}
               <tr>

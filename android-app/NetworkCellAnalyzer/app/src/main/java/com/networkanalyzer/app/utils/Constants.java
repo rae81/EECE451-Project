@@ -66,10 +66,11 @@ public final class Constants {
     public static final String API_LOGIN = "auth/login";
     public static final String API_REGISTER = "auth/register";
     public static final String API_REFRESH = "auth/refresh";
-    public static final String API_RECEIVE_DATA = "receive-data";
-    public static final String API_GET_STATS = "get-stats";
-    public static final String API_CENTRAL_STATS = "central-stats";
-    public static final String API_AVG_ALL = "get-stats/avg-all";
+    public static final String API_RECEIVE_DATA = "api/cell/ingest";
+    public static final String API_RECEIVE_BATCH = "api/cell/ingest/batch";
+    public static final String API_GET_STATS = "api/stats/device";
+    public static final String API_AVG_ALL = "api/stats/fleet";
+    public static final String API_CENTRAL_STATS = "api/stats/central";
     public static final String API_SPEED_TEST = "speed-test";
 
     // Export

@@ -1,35 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ── Brand / Primary (Indigo 400) ── -->
-    <color name="colorPrimary">#818CF8</color>
-    <color name="colorPrimaryDark">#6366F1</color>
-    <color name="colorPrimaryLight">#A5B4FC</color>
-    <color name="colorOnPrimary">#1E1B4B</color>
-    <color name="colorPrimaryVariant">#6366F1</color>
-    <color name="colorPrimaryContainer">#3730A3</color>
-    <color name="colorOnPrimaryContainer">#E0E7FF</color>
+    <!-- ──────────────────────────────────────────────────────────────
+         Dark-mode Aurora: emerald lightens, violet lightens, neutrals
+         sit on warm stone-950 (true warm black) rather than cold slate.
+         ──────────────────────────────────────────────────────────── -->
 
-    <!-- ── Secondary / Accent (Rose 400) ── -->
-    <color name="colorSecondary">#FB7185</color>
-    <color name="colorSecondaryDark">#E11D48</color>
-    <color name="colorOnSecondary">#500724</color>
-    <color name="colorSecondaryVariant">#F43F5E</color>
-    <color name="colorSecondaryContainer">#9F1239</color>
-    <color name="colorOnSecondaryContainer">#FFE4E6</color>
+    <!-- ── Brand / Primary (Emerald 400 — lightened for dark) ── -->
+    <color name="colorPrimary">#34D399</color>
+    <color name="colorPrimaryDark">#10B981</color>
+    <color name="colorPrimaryLight">#6EE7B7</color>
+    <color name="colorOnPrimary">#064E3B</color>
+    <color name="colorPrimaryVariant">#10B981</color>
+    <color name="colorPrimaryContainer">#065F46</color>
+    <color name="colorOnPrimaryContainer">#D1FAE5</color>
 
-    <!-- ── Tertiary ── -->
-    <color name="colorTertiary">#38BDF8</color>
-    <color name="colorOnTertiary">#0C4A6E</color>
+    <!-- ── Secondary / Accent (Violet 400) ── -->
+    <color name="colorSecondary">#A78BFA</color>
+    <color name="colorSecondaryDark">#7C3AED</color>
+    <color name="colorOnSecondary">#3B0764</color>
+    <color name="colorSecondaryVariant">#8B5CF6</color>
+    <color name="colorSecondaryContainer">#4C1D95</color>
+    <color name="colorOnSecondaryContainer">#EDE9FE</color>
 
-    <!-- ── Surfaces ── -->
-    <color name="colorBackground">#0A0E1A</color>
-    <color name="colorSurface">#131A2C</color>
-    <color name="colorSurfaceContainer">#1A2340</color>
-    <color name="colorSurfaceContainerHigh">#212B4D</color>
-    <color name="colorOnBackground">#E7EBF5</color>
-    <color name="colorOnSurface">#E7EBF5</color>
-    <color name="colorSurfaceVariant">#2A334B</color>
-    <color name="colorOnSurfaceVariant">#B2BACB</color>
+    <!-- ── Tertiary (Rose light) ── -->
+    <color name="colorTertiary">#FB7185</color>
+    <color name="colorOnTertiary">#881337</color>
+
+    <!-- ── Surfaces (warm stone-900 stack) ── -->
+    <color name="colorBackground">#0C0A09</color>
+    <color name="colorSurface">#1C1917</color>
+    <color name="colorSurfaceContainer">#292524</color>
+    <color name="colorSurfaceContainerHigh">#44403C</color>
+    <color name="colorOnBackground">#FAFAF9</color>
+    <color name="colorOnSurface">#FAFAF9</color>
+    <color name="colorSurfaceVariant">#292524</color>
+    <color name="colorOnSurfaceVariant">#D6D3D1</color>
 
     <!-- ── Error ── -->
     <color name="colorError">#F87171</color>
@@ -37,44 +42,44 @@
     <color name="colorErrorContainer">#7F1D1D</color>
     <color name="colorOnErrorContainer">#FEE2E2</color>
 
-    <!-- ── Signal Quality ── -->
+    <!-- ── Signal Quality (lightened for dark) ── -->
     <color name="signalExcellent">#34D399</color>
     <color name="signalGood">#A3E635</color>
     <color name="signalFair">#FBBF24</color>
     <color name="signalPoor">#F87171</color>
-    <color name="signalNoSignal">#6B7280</color>
+    <color name="signalNoSignal">#A8A29E</color>
 
     <!-- ── Network Technology Badges ── -->
     <color name="badge2G">#D97706</color>
-    <color name="badge3G">#16A34A</color>
-    <color name="badge4G">#818CF8</color>
+    <color name="badge3G">#84CC16</color>
+    <color name="badge4G">#34D399</color>
     <color name="badge5G">#A78BFA</color>
-    <color name="badgeUnknown">#6B7280</color>
-    <color name="badgeText">#0B1020</color>
+    <color name="badgeUnknown">#A8A29E</color>
+    <color name="badgeText">#0C0A09</color>
 
     <!-- ── Chart Palette ── -->
-    <color name="chartColor1">#818CF8</color>
-    <color name="chartColor2">#FB7185</color>
-    <color name="chartColor3">#FBBF24</color>
-    <color name="chartColor4">#34D399</color>
-    <color name="chartColor5">#A78BFA</color>
-    <color name="chartColor6">#38BDF8</color>
+    <color name="chartColor1">#34D399</color>
+    <color name="chartColor2">#A78BFA</color>
+    <color name="chartColor3">#FB7185</color>
+    <color name="chartColor4">#FBBF24</color>
+    <color name="chartColor5">#22D3EE</color>
+    <color name="chartColor6">#F472B6</color>
 
     <!-- ── Splash / Intro ── -->
-    <color name="splashStart">#020617</color>
-    <color name="splashEnd">#0A0E1A</color>
+    <color name="splashStart">#022C22</color>
+    <color name="splashEnd">#1E1B4B</color>
 
     <!-- ── Status ── -->
     <color name="statusActive">#34D399</color>
     <color name="statusInactive">#F87171</color>
-    <color name="cardStroke">#2A334B</color>
-    <color name="divider">#2A334B</color>
-    <color name="outline">#3E485F</color>
+    <color name="cardStroke">#44403C</color>
+    <color name="divider">#44403C</color>
+    <color name="outline">#78716C</color>
 
     <!-- ── Text ── -->
-    <color name="textPrimary">#F1F5F9</color>
-    <color name="textSecondary">#8B93A7</color>
-    <color name="textHint">#6B7280</color>
+    <color name="textPrimary">#FAFAF9</color>
+    <color name="textSecondary">#A8A29E</color>
+    <color name="textHint">#78716C</color>
     <color name="textWhite">#FFFFFF</color>
     <color name="textWhite60">#99FFFFFF</color>
     <color name="textWhite40">#66FFFFFF</color>
@@ -83,27 +88,27 @@
     <color name="heatmapStrong">#34D399</color>
     <color name="heatmapMedium">#FBBF24</color>
     <color name="heatmapWeak">#F87171</color>
-    <color name="heatmapHudSurface">#E6131A2C</color>
-    <color name="heatmapHudSurfaceSecondary">#E61A2340</color>
-    <color name="heatmapHudStroke">#666E7899</color>
-    <color name="heatmapHudDivider">#59546882</color>
+    <color name="heatmapHudSurface">#E61C1917</color>
+    <color name="heatmapHudSurfaceSecondary">#E6292524</color>
+    <color name="heatmapHudStroke">#6678716C</color>
+    <color name="heatmapHudDivider">#5978716C</color>
 
     <color name="pingPongWarning">#FB7185</color>
 
-    <!-- ── Hero / Navigation Surfaces (deep indigo) ── -->
-    <color name="heroSurfaceStart">#1E1B4B</color>
-    <color name="heroSurfaceEnd">#0A0E1A</color>
+    <!-- ── Hero / Navigation Surfaces ── -->
+    <color name="heroSurfaceStart">#065F46</color>
+    <color name="heroSurfaceEnd">#1E1B4B</color>
     <color name="heroSurfaceAccent">#FB7185</color>
-    <color name="navSurface">#131A2C</color>
-    <color name="navShadow">#020617</color>
+    <color name="navSurface">#1C1917</color>
+    <color name="navShadow">#0C0A09</color>
 
     <!-- ── Dead Zone Prediction ── -->
     <color name="deadzoneHigh">#F87171</color>
     <color name="deadzoneMedium">#FBBF24</color>
     <color name="deadzoneLow">#34D399</color>
-    <color name="deadzoneUnknown">#6B7280</color>
+    <color name="deadzoneUnknown">#A8A29E</color>
 
     <!-- ── Bottom Navigation ── -->
-    <color name="bottomNavSurface">#131A2C</color>
-    <color name="bottomNavIndicator">#312E81</color>
+    <color name="bottomNavSurface">#1C1917</color>
+    <color name="bottomNavIndicator">#065F46</color>
 </resources>

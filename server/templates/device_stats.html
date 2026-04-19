@@ -17,9 +17,9 @@
         </div>
       </div>
       <div class="topbar-links">
-        <a href="/central-stats">Overview</a>
+        <a href="/dashboard">Overview</a>
         <a href="/heatmap">Heatmap</a>
-        <a href="/device-stats?device_id={{ device_id }}">Current Device</a>
+        <a href="/device/overview?device_id={{ device_id }}">Current Device</a>
       </div>
     </nav>
 
@@ -48,7 +48,7 @@
         </div>
         <p>Adjust the device-specific window without changing the stored data.</p>
       </div>
-      <form class="filter-form" method="get" action="/device-stats">
+      <form class="filter-form" method="get" action="/device/overview">
         <input type="hidden" name="device_id" value="{{ device_id }}">
         <label>
           Start
@@ -63,7 +63,7 @@
       <div class="stats-grid">
         <article class="stat-box">
           <span class="stat-title">Average Device Signal</span>
-          <span class="stat-value">{{ stats.avg_signal_device }} dBm</span>
+          <span class="stat-value">{{ stats.avg_signal_power }} dBm</span>
         </article>
         <article class="stat-box">
           <span class="stat-title">First Sample</span>
@@ -94,23 +94,23 @@
         <article class="metric-stack">
           <h3>Connectivity Per Operator</h3>
           <ul class="key-value-list">
-            {% for key, value in stats.connectivity_per_operator.items() %}
-            <li><span>{{ key }}</span><strong>{{ value }}</strong></li>
+            {% for key, value in stats.operator_time.items() %}
+            <li><span>{{ key }}</span><strong>{{ "%.2f"|format(value) }}%</strong></li>
             {% endfor %}
           </ul>
         </article>
         <article class="metric-stack">
           <h3>Connectivity Per Network Type</h3>
           <ul class="key-value-list">
-            {% for key, value in stats.connectivity_per_network_type.items() %}
-            <li><span>{{ key }}</span><strong>{{ value }}</strong></li>
+            {% for key, value in stats.network_type_time.items() %}
+            <li><span>{{ key }}</span><strong>{{ "%.2f"|format(value) }}%</strong></li>
             {% endfor %}
           </ul>
         </article>
         <article class="metric-stack">
           <h3>Average Signal Per Network Type</h3>
           <ul class="key-value-list">
-            {% for key, value in stats.avg_signal_per_network_type.items() %}
+            {% for key, value in stats.avg_signal_per_type.items() %}
             <li><span>{{ key }}</span><strong>{{ value }} dBm</strong></li>
             {% endfor %}
           </ul>
@@ -126,7 +126,7 @@
         <article class="metric-stack">
           <h3>Average SNR Per Network Type</h3>
           <ul class="key-value-list">
-            {% for key, value in stats.avg_snr_per_network_type.items() %}
+            {% for key, value in stats.avg_snr_per_type.items() %}
             <li><span>{{ key }}</span><strong>{{ value }}</strong></li>
             {% else %}
             <li><span>No SNR values available</span><strong>N/A</strong></li>

@@ -1,0 +1,39 @@
+================================================================================
+ Database Design Artifacts (component-level, not data-volume)
+ These figures describe the database as a system component: structure,
+ relationships, data dictionary, indexing strategy. They do NOT reflect any
+ particular snapshot of captured data.
+================================================================================
+
+01_er_diagram.png
+    Entity-relationship diagram of the full schema. Six tables shown with
+    their columns, primary keys marked "PK" in emerald, and foreign-key
+    relationships drawn as violet arrows labelled with the joining column.
+    Reveals: the single-owner model (users owns everything via device_id)
+    and the one compositional relationship (neighbor_cell_data belongs to
+    a parent cell_data row).
+
+03_schema_table.png
+    Full column-level schema reference — every column of every table, its
+    declared SQLite type, and its constraints (PK / NOT NULL). Use this as
+    the authoritative data-dictionary for the report.
+
+04_indexes.png
+    List of all nine secondary indexes (implicit primary-key indexes are
+    omitted). Documents the query-performance design:
+      - per-device lookups are O(log n) on every table via the device_id
+        index;
+      - timestamp range scans on cell_data and speed_test_results are
+        index-backed;
+      - e-mail-based auth is O(log n) via ix_users_email;
+      - neighbour joins are O(log n) via ix_neighbor_cell_data_cell_data_id.
+
+================================================================================
+ Design choices captured by these figures:
+   Engine       : SQLite 3 (zero-admin, file-per-deployment)
+   ORM          : SQLAlchemy with declarative models in server/models.py
+   Migrations   : idempotent column-level ALTERs executed at app startup
+   Relationships: enforced application-side via device_id, not by FK
+                  constraints (SQLite FKs are opt-in and left off for
+                  flexibility during schema evolution)
+================================================================================

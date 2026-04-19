@@ -1,111 +1,117 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ── Brand / Primary (Indigo 600) ── -->
-    <color name="colorPrimary">#4F46E5</color>
-    <color name="colorPrimaryDark">#3730A3</color>
-    <color name="colorPrimaryLight">#818CF8</color>
+    <!-- ──────────────────────────────────────────────────────────────
+         Palette: "Aurora" — emerald primary + violet accent on warm
+         stone neutrals. Deliberately warm-toned to contrast with the
+         previous cold slate/blue scheme.
+         ──────────────────────────────────────────────────────────── -->
+
+    <!-- ── Brand / Primary (Emerald 700) ── -->
+    <color name="colorPrimary">#047857</color>
+    <color name="colorPrimaryDark">#064E3B</color>
+    <color name="colorPrimaryLight">#34D399</color>
     <color name="colorOnPrimary">#FFFFFF</color>
-    <color name="colorPrimaryVariant">#6366F1</color>
-    <color name="colorPrimaryContainer">#E0E7FF</color>
-    <color name="colorOnPrimaryContainer">#1E1B4B</color>
+    <color name="colorPrimaryVariant">#059669</color>
+    <color name="colorPrimaryContainer">#D1FAE5</color>
+    <color name="colorOnPrimaryContainer">#064E3B</color>
 
-    <!-- ── Secondary / Accent (Coral / Rose) ── -->
-    <color name="colorSecondary">#F43F5E</color>
-    <color name="colorSecondaryDark">#BE123C</color>
+    <!-- ── Secondary / Accent (Violet 600) ── -->
+    <color name="colorSecondary">#7C3AED</color>
+    <color name="colorSecondaryDark">#5B21B6</color>
     <color name="colorOnSecondary">#FFFFFF</color>
-    <color name="colorSecondaryVariant">#FB7185</color>
-    <color name="colorSecondaryContainer">#FFE4E6</color>
-    <color name="colorOnSecondaryContainer">#500724</color>
+    <color name="colorSecondaryVariant">#8B5CF6</color>
+    <color name="colorSecondaryContainer">#EDE9FE</color>
+    <color name="colorOnSecondaryContainer">#3B0764</color>
 
-    <!-- ── Tertiary (Teal) ── -->
-    <color name="colorTertiary">#0EA5E9</color>
+    <!-- ── Tertiary (Rose) ── -->
+    <color name="colorTertiary">#F43F5E</color>
     <color name="colorOnTertiary">#FFFFFF</color>
 
-    <!-- ── Surfaces ── -->
-    <color name="colorBackground">#F6F7FB</color>
+    <!-- ── Surfaces (warm cream + stone neutrals) ── -->
+    <color name="colorBackground">#FDFCF7</color>
     <color name="colorSurface">#FFFFFF</color>
-    <color name="colorSurfaceContainer">#F1F3FA</color>
-    <color name="colorSurfaceContainerHigh">#EAEDF7</color>
-    <color name="colorOnBackground">#0B1020</color>
-    <color name="colorOnSurface">#0B1020</color>
-    <color name="colorSurfaceVariant">#EEF0F7</color>
-    <color name="colorOnSurfaceVariant">#44495C</color>
+    <color name="colorSurfaceContainer">#F5F4F2</color>
+    <color name="colorSurfaceContainerHigh">#E7E5E4</color>
+    <color name="colorOnBackground">#1C1917</color>
+    <color name="colorOnSurface">#1C1917</color>
+    <color name="colorSurfaceVariant">#F5F4F2</color>
+    <color name="colorOnSurfaceVariant">#57534E</color>
 
     <!-- ── Error ── -->
-    <color name="colorError">#EF4444</color>
+    <color name="colorError">#DC2626</color>
     <color name="colorOnError">#FFFFFF</color>
     <color name="colorErrorContainer">#FEE2E2</color>
     <color name="colorOnErrorContainer">#7F1D1D</color>
 
     <!-- ── Signal Quality ── -->
-    <color name="signalExcellent">#10B981</color>
-    <color name="signalGood">#84CC16</color>
-    <color name="signalFair">#F59E0B</color>
-    <color name="signalPoor">#EF4444</color>
-    <color name="signalNoSignal">#9CA3B4</color>
+    <color name="signalExcellent">#047857</color>
+    <color name="signalGood">#65A30D</color>
+    <color name="signalFair">#D97706</color>
+    <color name="signalPoor">#DC2626</color>
+    <color name="signalNoSignal">#78716C</color>
 
-    <!-- ── Network Technology Badges ── -->
+    <!-- ── Network Technology Badges (aligned with new palette) ── -->
     <color name="badge2G">#92400E</color>
-    <color name="badge3G">#166534</color>
-    <color name="badge4G">#4F46E5</color>
+    <color name="badge3G">#65A30D</color>
+    <color name="badge4G">#047857</color>
     <color name="badge5G">#7C3AED</color>
-    <color name="badgeUnknown">#6B7280</color>
+    <color name="badgeUnknown">#78716C</color>
     <color name="badgeText">#FFFFFF</color>
 
     <!-- ── Chart Palette ── -->
-    <color name="chartColor1">#4F46E5</color>
-    <color name="chartColor2">#F43F5E</color>
-    <color name="chartColor3">#F59E0B</color>
-    <color name="chartColor4">#10B981</color>
-    <color name="chartColor5">#8B5CF6</color>
-    <color name="chartColor6">#0EA5E9</color>
+    <color name="chartColor1">#047857</color>
+    <color name="chartColor2">#7C3AED</color>
+    <color name="chartColor3">#F43F5E</color>
+    <color name="chartColor4">#D97706</color>
+    <color name="chartColor5">#0891B2</color>
+    <color name="chartColor6">#BE185D</color>
 
-    <!-- ── Splash / Intro (deep indigo → night) ── -->
-    <color name="splashStart">#1E1B4B</color>
-    <color name="splashEnd">#0B1020</color>
+    <!-- ── Splash / Intro (emerald → violet gradient) ── -->
+    <color name="splashStart">#064E3B</color>
+    <color name="splashEnd">#3B0764</color>
 
     <!-- ── Status ── -->
-    <color name="statusActive">#10B981</color>
-    <color name="statusInactive">#EF4444</color>
+    <color name="statusActive">#047857</color>
+    <color name="statusInactive">#DC2626</color>
 
     <!-- ── Structural ── -->
-    <color name="cardStroke">#E0E4EF</color>
-    <color name="divider">#E0E4EF</color>
-    <color name="outline">#B9C0D4</color>
+    <color name="cardStroke">#E7E5E4</color>
+    <color name="divider">#E7E5E4</color>
+    <color name="outline">#A8A29E</color>
 
     <!-- ── Text ── -->
-    <color name="textPrimary">#0B1020</color>
-    <color name="textSecondary">#5A637A</color>
-    <color name="textHint">#9CA3B4</color>
+    <color name="textPrimary">#1C1917</color>
+    <color name="textSecondary">#57534E</color>
+    <color name="textHint">#A8A29E</color>
     <color name="textWhite">#FFFFFF</color>
     <color name="textWhite60">#99FFFFFF</color>
     <color name="textWhite40">#66FFFFFF</color>
 
     <!-- ── Heatmap ── -->
-    <color name="heatmapStrong">#10B981</color>
-    <color name="heatmapMedium">#F59E0B</color>
-    <color name="heatmapWeak">#EF4444</color>
+    <color name="heatmapStrong">#047857</color>
+    <color name="heatmapMedium">#D97706</color>
+    <color name="heatmapWeak">#DC2626</color>
     <color name="heatmapHudSurface">#F2FFFFFF</color>
-    <color name="heatmapHudSurfaceSecondary">#EAF6F7FB</color>
-    <color name="heatmapHudStroke">#66D1D6E6</color>
-    <color name="heatmapHudDivider">#59D1D6E6</color>
+    <color name="heatmapHudSurfaceSecondary">#EAF5F4F2</color>
+    <color name="heatmapHudStroke">#66D6D3D1</color>
+    <color name="heatmapHudDivider">#59D6D3D1</color>
 
     <color name="pingPongWarning">#F43F5E</color>
 
-    <!-- ── Hero / Navigation Surfaces (indigo gradient) ── -->
-    <color name="heroSurfaceStart">#312E81</color>
-    <color name="heroSurfaceEnd">#1E1B4B</color>
+    <!-- ── Hero / Navigation Surfaces (emerald → violet diagonal) ── -->
+    <color name="heroSurfaceStart">#047857</color>
+    <color name="heroSurfaceEnd">#3B0764</color>
     <color name="heroSurfaceAccent">#F43F5E</color>
-    <color name="navSurface">#F6F7FB</color>
-    <color name="navShadow">#0B1020</color>
+    <color name="navSurface">#FDFCF7</color>
+    <color name="navShadow">#1C1917</color>
 
     <!-- ── Dead Zone Prediction ── -->
-    <color name="deadzoneHigh">#EF4444</color>
-    <color name="deadzoneMedium">#F59E0B</color>
-    <color name="deadzoneLow">#10B981</color>
-    <color name="deadzoneUnknown">#9CA3B4</color>
+    <color name="deadzoneHigh">#DC2626</color>
+    <color name="deadzoneMedium">#D97706</color>
+    <color name="deadzoneLow">#047857</color>
+    <color name="deadzoneUnknown">#78716C</color>
 
     <!-- ── Bottom Navigation ── -->
     <color name="bottomNavSurface">#FFFFFF</color>
-    <color name="bottomNavIndicator">#E0E7FF</color>
+    <color name="bottomNavIndicator">#D1FAE5</color>
 </resources>

@@ -1,0 +1,164 @@
+================================================================================
+ Android Wireless Debugging Setup
+ Step-by-step guide for enabling Developer Mode and connecting the phone to
+ a Linux host over Wi-Fi (no USB cable required).
+================================================================================
+
+REQUIREMENTS
+------------
+- Android 11 or newer (Wireless Debugging is built into Developer Options).
+- Phone and computer on the SAME Wi-Fi network.
+- adb installed on the computer (ships with Android Studio's platform-tools;
+  on this machine it is at ~/Android/Sdk/platform-tools/adb).
+
+
+PART 1 — Enable Developer Mode (the "tap 7 times" trick)
+--------------------------------------------------------
+1.  Unlock the phone and open the Settings app.
+
+2.  Scroll to the very bottom and tap "About phone".
+    (On Samsung One UI the path is: Settings -> About phone.)
+
+3.  Inside "About phone", tap "Software information".
+    (On stock Android / Pixel this step is skipped; the Build number is
+     already on the About phone page.)
+
+4.  Find the row labelled "Build number".
+
+5.  Tap "Build number" SEVEN (7) TIMES in a row, quickly.
+    - After the 3rd or 4th tap a small toast appears at the bottom reading
+      "You are now <N> steps away from being a developer".
+    - After the 6th tap it switches to "You are now a developer!".
+    - The phone may prompt you for your PIN/pattern/password on the 7th tap
+      to confirm it is really you. Enter it.
+
+6.  Go BACK to the main Settings page. A new entry called
+    "Developer options" is now available.
+    - Samsung: Settings -> Developer options.
+    - Pixel / stock Android: Settings -> System -> Developer options.
+
+
+PART 2 — Turn on Wireless Debugging
+-----------------------------------
+1.  Open Settings -> Developer options.
+
+2.  Make sure the master toggle at the top ("Developer options") is ON.
+
+3.  Scroll down to the "Debugging" section.
+
+4.  Toggle "Wireless debugging" ON.
+    - The phone will warn that the current Wi-Fi network is trusted.
+      Tap "Allow" (and tick "Always allow on this network" if you want to
+      skip the prompt next time).
+
+5.  Tap the WORDS "Wireless debugging" (not the toggle) to open its detail
+    screen. This screen shows:
+        IP address & Port ......... e.g. 192.168.0.166:36393
+        Device name ............... e.g. SM-S926B
+        Pairing code (on demand) .. six-digit code + IP:port
+
+    Keep this screen open — the IP:port changes every time you toggle the
+    feature, and the pairing code times out after about 60 seconds.
+
+
+PART 3 — Pair the phone with the computer (one-time per computer)
+-----------------------------------------------------------------
+1.  On the phone's "Wireless debugging" screen, tap
+    "Pair device with pairing code".
+    A dialog appears showing:
+        - A six-digit pairing code,
+        - An IP address and port, e.g. 192.168.0.166:42617.
+    Leave this dialog open.
+
+2.  On the computer, open a terminal and run:
+
+        adb pair 192.168.0.166:42617
+
+    (Use the IP:port shown in the PAIRING dialog, not the one on the main
+     Wireless debugging screen. They are different ports.)
+
+3.  adb will print: "Enter pairing code:".
+    Type the 6-digit code from the phone and press Enter.
+
+4.  On success adb prints:
+        Successfully paired to 192.168.0.166:42617 [guid=adb-...]
+
+    The phone closes the pairing dialog automatically.
+
+
+PART 4 — Connect for actual debugging
+-------------------------------------
+1.  Look at the MAIN "Wireless debugging" screen again. Note the
+    "IP address & Port" value (this is the connect port, usually different
+    from the pairing port):
+
+        192.168.0.166:36393
+
+2.  On the computer run:
+
+        adb connect 192.168.0.166:36393
+
+    Expected output:
+        connected to 192.168.0.166:36393
+
+3.  Verify the device is visible:
+
+        adb devices
+
+    Expected output:
+        List of devices attached
+        192.168.0.166:36393    device
+
+4.  You can now run any normal adb command against it, e.g.:
+
+        adb -s 192.168.0.166:36393 shell
+        adb -s 192.168.0.166:36393 install app-debug.apk
+        adb -s 192.168.0.166:36393 logcat
+
+    Or, from the project directory, install the app straight from Gradle:
+
+        cd android-app/NetworkCellAnalyzer
+        JAVA_HOME=$HOME/Android/jdk21 \
+        PATH=$HOME/Android/jdk21/bin:$HOME/Android/Sdk/platform-tools:$PATH \
+        ./gradlew installDebug
+
+    Gradle will push the APK over Wi-Fi to every connected device.
+
+
+PART 5 — Relaunching after the phone reboots / Wi-Fi drops
+----------------------------------------------------------
+- Pairing is persistent, but the IP:port changes every time Wireless
+  debugging is toggled off/on or the phone reboots.
+- To reconnect, you only need to repeat PART 4 (adb connect ...). You do
+  NOT need to pair again unless you explicitly revoked authorisations.
+- If adb gets stuck, reset it:
+
+        adb kill-server
+        adb start-server
+        adb connect <new IP:port from the phone>
+
+
+TROUBLESHOOTING
+---------------
+- "failed to connect ... Connection refused"
+    The IP:port has changed. Look at the Wireless debugging screen again
+    and use the current value.
+
+- "device unauthorized"
+    Tap "Allow" on the phone when the USB-debug-style prompt appears.
+    Tick "Always allow from this computer" to skip it next time.
+
+- "adb: command not found"
+    Add platform-tools to PATH:
+        export PATH=$HOME/Android/Sdk/platform-tools:$PATH
+
+- Pairing dialog closes before you finish typing
+    The 6-digit code expires after ~60s. Just tap
+    "Pair device with pairing code" again for a fresh one.
+
+- Two entries in `adb devices` (IP + _adb-tls-connect._tcp)
+    Normal on Samsung phones — both point at the same device. Install
+    commands will run on both; pick one with -s <serial> if you need to
+    target a specific transport.
+
+================================================================================

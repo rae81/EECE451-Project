@@ -56,22 +56,22 @@ public interface ApiService {
 
     // ---- Cell Data Submission ----
 
-    @POST("receive-data")
+    @POST("api/cell/ingest")
     Call<GenericResponse> sendCellData(@Body CellDataRequest request);
 
-    @POST("receive-data/batch")
+    @POST("api/cell/ingest/batch")
     Call<GenericResponse> sendBatchCellData(@Body BatchCellDataRequest request);
 
     // ---- Statistics ----
 
-    @GET("get-stats")
+    @GET("api/stats/device")
     Call<StatsResponse> getStats(
             @Query("device_id") String deviceId,
             @Query("from") String from,
             @Query("to") String to
     );
 
-    @GET("get-stats/avg-all")
+    @GET("api/stats/fleet")
     Call<StatsResponse> getAvgAllStats(
             @Query("from") String from,
             @Query("to") String to

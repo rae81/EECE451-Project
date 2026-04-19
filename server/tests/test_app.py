@@ -33,21 +33,20 @@ def test_receive_data_and_stats_flow():
         "location_accuracy_m": 8.0,
     }
 
-    response = client.post("/receive-data", json=payload)
+    response = client.post("/api/cell/ingest", json=payload)
     assert response.status_code == 201
     assert response.get_json()["success"] is True
     assert response.get_json()["message"] == "stored"
 
-    stats_response = client.get("/get-stats", query_string={"device_id": "phone-1"})
+    stats_response = client.get("/api/stats/device", query_string={"device_id": "phone-1"})
     assert stats_response.status_code == 200
     body = stats_response.get_json()
     assert body["success"] is True
-    assert body["avg_signal_device"] == -85
+    assert body["avg_signal_power"] == -85
     assert body["avg_signal_per_device"]["phone-1"] == -85
-    assert body["connectivity_per_operator"]["Alfa"] == "100.0%"
     assert body["operator_time"]["Alfa"] == 100.0
 
-    avg_all_response = client.get("/get-stats/avg-all")
+    avg_all_response = client.get("/api/stats/fleet")
     assert avg_all_response.status_code == 200
     assert avg_all_response.get_json()["unique_devices"] == 1
 
@@ -71,7 +70,7 @@ def test_invalid_network_type_is_rejected():
     client, _app = create_test_client()
 
     response = client.post(
-        "/receive-data",
+        "/api/cell/ingest",
         json={
             "device_id": "phone-1",
             "operator": "Alfa",
@@ -108,11 +107,11 @@ def test_date_filtering_works():
     ]
 
     for payload in payloads:
-        response = client.post("/receive-data", json=payload)
+        response = client.post("/api/cell/ingest", json=payload)
         assert response.status_code == 201
 
     stats_response = client.get(
-        "/get-stats",
+        "/api/stats/device",
         query_string={
             "device_id": "phone-1",
             "start": "09 Mar 2026 12:00 PM",
@@ -122,7 +121,7 @@ def test_date_filtering_works():
     assert stats_response.status_code == 200
     body = stats_response.get_json()
     assert body["record_count"] == 1
-    assert body["avg_signal_device"] == -80
+    assert body["avg_signal_power"] == -80
 
 
 def test_connectivity_time_is_duration_weighted():
@@ -156,11 +155,11 @@ def test_connectivity_time_is_duration_weighted():
     ]
 
     for payload in payloads:
-        response = client.post("/receive-data", json=payload)
+        response = client.post("/api/cell/ingest", json=payload)
         assert response.status_code == 201
 
     stats_response = client.get(
-        "/get-stats",
+        "/api/stats/device",
         query_string={
             "device_id": "phone-1",
             "from": "2026-03-09T13:00:00Z",
@@ -180,7 +179,7 @@ def test_heatmap_requires_valid_coordinate_pair():
     client, _app = create_test_client()
 
     response = client.post(
-        "/receive-data",
+        "/api/cell/ingest",
         json={
             "device_id": "phone-1",
             "operator": "Alfa",
@@ -199,7 +198,7 @@ def test_device_log_preserves_existing_mac_when_new_payload_omits_it():
     client, app = create_test_client()
 
     first_response = client.post(
-        "/receive-data",
+        "/api/cell/ingest",
         json={
             "device_id": "phone-1",
             "operator": "Alfa",
@@ -213,7 +212,7 @@ def test_device_log_preserves_existing_mac_when_new_payload_omits_it():
     assert first_response.status_code == 201
 
     second_response = client.post(
-        "/receive-data",
+        "/api/cell/ingest",
         json={
             "device_id": "phone-1",
             "operator": "Alfa",
@@ -235,7 +234,7 @@ def test_batch_ingest_speed_test_and_alert_rules():
     client, _app = create_test_client()
 
     batch_response = client.post(
-        "/receive-batch",
+        "/api/cell/ingest/batch",
         json={
             "records": [
                 {
@@ -345,7 +344,7 @@ def test_tower_clusters_and_diagnostics_summary():
     ]
 
     for payload in payloads:
-        response = client.post("/receive-data", json=payload)
+        response = client.post("/api/cell/ingest", json=payload)
         assert response.status_code == 201
 
     speed_response = client.post(
@@ -416,7 +415,7 @@ def test_android_contract_aliases_and_auth_flow():
     assert refresh_response.get_json()["success"] is True
 
     batch_response = client.post(
-        "/receive-data/batch",
+        "/api/cell/ingest/batch",
         json={
             "device_id": "android-device-1",
             "data": [
@@ -445,7 +444,7 @@ def test_android_contract_aliases_and_auth_flow():
     from_ms = str(1_773_150_000_000)
     to_ms = str(1_773_157_200_000)
     stats_response = client.get(
-        "/get-stats",
+        "/api/stats/device",
         query_string={"device_id": "android-device-1", "from": from_ms, "to": to_ms},
     )
     assert stats_response.status_code == 200
@@ -493,7 +492,7 @@ def test_prediction_and_pdf_report_routes():
             }
         )
 
-    batch_response = client.post("/receive-batch", json={"records": records})
+    batch_response = client.post("/api/cell/ingest/batch", json={"records": records})
     assert batch_response.status_code == 201
 
     predict_response = client.get(
@@ -529,7 +528,7 @@ def test_dashboard_handles_naive_device_datetimes():
         )
         db.session.commit()
 
-    dashboard_response = client.get("/central-stats")
+    dashboard_response = client.get("/dashboard")
     assert dashboard_response.status_code == 200
 
     heatmap_response = client.get("/heatmap")

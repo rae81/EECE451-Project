@@ -3,7 +3,7 @@
 Maps raw identifiers (device_id, MAC address, IP) observed by the server
 into a friendly label, owning user, and best-effort vendor. The label
 is used by the dashboard and device-stats templates so the user sees
-"Rami's Galaxy S24+ (Samsung)" rather than a UUID.
+something like "Alice's Galaxy S24+ (Samsung)" rather than a raw UUID.
 
 The OUI → vendor table below is a small curated subset of the IEEE OUI
 registry covering common mobile/OEM prefixes. It is embedded (rather
