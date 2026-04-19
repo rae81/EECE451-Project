@@ -11,7 +11,7 @@ This document is the backend contract for the Android app.
   - `2026-03-09T14:30:00`
   - ISO 8601 timestamps with timezone
 
-## `POST /receive-data`
+## `POST /api/cell/ingest`
 
 Stores a single cell reading and updates device activity.
 
@@ -69,49 +69,55 @@ Stores a single cell reading and updates device activity.
 }
 ```
 
-## `GET /get-stats`
+## `GET /api/stats/device`
 
-Returns per-device statistics.
+Returns per-device statistics. Percentage fields (`operator_time`, `network_type_time`) are emitted as duration-weighted numeric values (0–100), not pre-formatted strings — clients format them at the display layer.
 
 ### Query parameters
 - `device_id` required
 - `start` optional
 - `end` optional
+- `from` / `to` also accepted (epoch-millis or ISO 8601)
 
 ### Example
-`/get-stats?device_id=abc123-def456&start=09 Mar 2026 12:00 PM&end=09 Mar 2026 03:00 PM`
+`/api/stats/device?device_id=abc123-def456&start=09 Mar 2026 12:00 PM&end=09 Mar 2026 03:00 PM`
 
 ### Success response
 ```json
 {
-  "connectivity_per_operator": {
-    "Alfa": "75.0%",
-    "Touch": "25.0%"
+  "success": true,
+  "operator_time": {
+    "Alfa": 75.0,
+    "Touch": 25.0
   },
-  "connectivity_per_network_type": {
-    "4G": "70.0%",
-    "3G": "25.0%",
-    "2G": "5.0%"
+  "network_type_time": {
+    "4G": 70.0,
+    "3G": 25.0,
+    "2G": 5.0
   },
-  "avg_signal_per_network_type": {
+  "avg_signal_per_type": {
     "4G": -82.3,
     "3G": -91.5,
     "2G": -98.1
   },
-  "avg_snr_per_network_type": {
+  "avg_snr_per_type": {
     "4G": 15.2
   },
   "avg_signal_per_device": {
     "abc123-def456": -85.7
   },
-  "avg_signal_device": -85.7,
+  "avg_signal_power": -85.7,
   "record_count": 40,
+  "total_records": 40,
+  "tracked_duration_seconds": 10800.0,
   "first_timestamp": "2026-03-09T12:00:00+00:00",
-  "last_timestamp": "2026-03-09T15:00:00+00:00"
+  "last_timestamp": "2026-03-09T15:00:00+00:00",
+  "from_date": "2026-03-09",
+  "to_date": "2026-03-09"
 }
 ```
 
-## `GET /get-stats/avg-all`
+## `GET /api/stats/fleet`
 
 Returns cross-device aggregates.
 
@@ -133,11 +139,11 @@ Returns cross-device aggregates.
 }
 ```
 
-## `GET /central-stats`
+## `GET /dashboard`
 
-Returns the server dashboard HTML page.
+Returns the server dashboard. Content-negotiated: the HTML page is served by default, and a JSON summary is returned when the client sends `Accept: application/json` or `?format=json`.
 
-## `GET /device-stats`
+## `GET /device/overview`
 
 Returns the per-device statistics HTML page.
 
@@ -225,9 +231,9 @@ Returns aggregated geo-tagged points for server-side map rendering.
 
 Returns the server heatmap HTML page.
 
-## `POST /receive-batch`
+## `POST /api/cell/ingest/batch`
 
-Stores a batch of queued readings. This is the server-side support needed for Android offline sync.
+Stores a batch of queued readings. This is the server-side support needed for Android offline sync. The request body can use either `records` or `data` as the array key.
 
 ### Request shape
 ```json

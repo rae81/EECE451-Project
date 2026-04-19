@@ -1,15 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Outer broadcast arc (faintest) -->
     <path
-        android:fillColor="#1565C0"
-        android:pathData="M54,10a44,44 0 1,0 0,88a44,44 0 1,0 0,-88z" />
+        android:pathData="M21,74 A33,33 0 0 1 87,74"
+        android:strokeColor="#B3FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round" />
+
+    <!-- Middle broadcast arc -->
+    <path
+        android:pathData="M30,74 A24,24 0 0 1 78,74"
+        android:strokeColor="#E6FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+
+    <!-- Inner broadcast arc -->
+    <path
+        android:pathData="M40,74 A14,14 0 0 1 68,74"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round" />
+
+    <!-- Emitter dot -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M31,58h10v18H31zM49,46h10v30H49zM67,34h10v42H67z" />
-    <path
-        android:fillColor="#00BCD4"
-        android:pathData="M28,32c8,-7 18,-11 26,-11s18,4 26,11l-4,4c-7,-6 -14,-8 -22,-8s-15,2 -22,8z" />
+        android:pathData="M54,74 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0z" />
 </vector>

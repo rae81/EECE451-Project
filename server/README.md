@@ -17,12 +17,12 @@ Clean Flask backend scaffold for the EECE 451 project.
 ## Main routes
 - `GET /`
 - `GET /healthz`
-- `POST /receive-data`
-- `GET /get-stats`
-- `GET /get-stats/avg-all`
-- `GET /central-stats`
-- `GET /device-stats`
-- `POST /receive-batch`
+- `POST /api/cell/ingest`
+- `POST /api/cell/ingest/batch`
+- `GET /api/stats/device`
+- `GET /api/stats/fleet`
+- `GET /dashboard`
+- `GET /device/overview`
 - `GET /predict`
 - `GET /api/history`
 - `GET /api/export.csv`
@@ -40,7 +40,7 @@ Clean Flask backend scaffold for the EECE 451 project.
 
 ## Local setup
 ```bash
-cd /home/ramieid/Desktop/451proj/server
+cd server
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -49,7 +49,7 @@ python3 app.py
 
 ## Local testing
 ```bash
-cd /home/ramieid/Desktop/451proj/server
+cd server
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 pytest
@@ -64,4 +64,4 @@ pytest
 - Heatmap responses are intentionally capped by default to keep the map responsive. Override with `max_points` if needed.
 - Dual-SIM-ready fields (`sim_slot`, `subscription_id`) are accepted by the backend.
 - Neighbor-cell payloads are accepted and aggregated by the backend when the Android app sends them.
-- Offline sync is supported server-side through `POST /receive-batch`.
+- Offline sync is supported server-side through `POST /api/cell/ingest/batch`.

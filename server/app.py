@@ -230,7 +230,7 @@ def register_routes(app: Flask) -> None:
         return jsonify({"predictions": results, "count": len(results)})
 
     # ── Measurement ingest ────────────────────────────────────────
-    @app.post("/receive-data")
+    @app.post("/api/cell/ingest")
     def receive_data():
         payload = request.get_json(silent=True)
         if not payload:
@@ -249,8 +249,7 @@ def register_routes(app: Flask) -> None:
 
         return jsonify({"success": True, "message": "stored"}), 201
 
-    @app.post("/receive-batch")
-    @app.post("/receive-data/batch")
+    @app.post("/api/cell/ingest/batch")
     def receive_batch():
         payload = request.get_json(silent=True)
         records = None
@@ -278,7 +277,7 @@ def register_routes(app: Flask) -> None:
         return jsonify({"success": True, "message": "batch stored", "stored_count": stored}), 201
 
     # ── Aggregate statistics ──────────────────────────────────────
-    @app.get("/get-stats")
+    @app.get("/api/stats/device")
     def get_stats():
         device_id = request.args.get("device_id", "").strip()
         if not device_id:
@@ -300,7 +299,7 @@ def register_routes(app: Flask) -> None:
         previous_rows = _fetch_previous_rows(window_start, device_id=device_id)
         return jsonify(_build_stats_payload(rows, window_start, window_end, previous_rows)), 200
 
-    @app.get("/get-stats/avg-all")
+    @app.get("/api/stats/fleet")
     def get_avg_all():
         start_raw = _get_time_filter("start", "from")
         end_raw = _get_time_filter("end", "to")
@@ -332,7 +331,7 @@ def register_routes(app: Flask) -> None:
         )
         return jsonify(payload)
 
-    @app.get("/central-stats")
+    @app.get("/dashboard")
     def central_stats():
         devices = _fetch_devices(active_window_minutes=app.config["ACTIVE_DEVICE_MINUTES"])
         recent_records = (
@@ -405,7 +404,7 @@ def register_routes(app: Flask) -> None:
         )
 
     # ── Per-device views ──────────────────────────────────────────
-    @app.get("/device-stats")
+    @app.get("/device/overview")
     def device_stats():
         device_id = request.args.get("device_id", "").strip()
         if not device_id:
@@ -1493,10 +1492,6 @@ def _accumulate_connectivity_time(
 
 # ── Stats formatting + payload assembly ──────────────────────────────
 
-def _format_percentage(value: float, total: float) -> str:
-    return f"{round((value / total) * 100, 2)}%"
-
-
 def _build_stats_payload(
     rows: list[CellData],
     window_start: datetime | None = None,
@@ -1562,29 +1557,17 @@ def _build_stats_payload(
 
     return {
         "success": True,
-        "connectivity_per_operator": {
-            key: _format_percentage(value, total_tracked_seconds)
-            for key, value in operator_durations.items()
-            if total_tracked_seconds > 0
-        },
-        "connectivity_per_network_type": {
-            key: _format_percentage(value, total_tracked_seconds)
-            for key, value in network_durations.items()
-            if total_tracked_seconds > 0
-        },
-        "avg_signal_per_network_type": avg_signal_per_type,
-        "avg_snr_per_network_type": avg_snr_per_type,
-        "avg_signal_per_device": avg_signal_per_device,
-        "avg_signal_device": round(mean([row.signal_power for row in rows]), 2),
-        "record_count": total,
-        "first_timestamp": first_timestamp,
-        "last_timestamp": last_timestamp,
-        "tracked_duration_seconds": round(total_tracked_seconds, 2),
         "operator_time": operator_percentages,
         "network_type_time": network_percentages,
         "avg_signal_per_type": avg_signal_per_type,
         "avg_snr_per_type": avg_snr_per_type,
+        "avg_signal_per_device": avg_signal_per_device,
+        "avg_signal_power": round(mean([row.signal_power for row in rows]), 2),
+        "record_count": total,
         "total_records": total,
+        "first_timestamp": first_timestamp,
+        "last_timestamp": last_timestamp,
+        "tracked_duration_seconds": round(total_tracked_seconds, 2),
         "from_date": effective_start.date().isoformat(),
         "to_date": effective_end.date().isoformat(),
     }
@@ -2175,13 +2158,13 @@ def _build_pdf_report(rows: list[CellData]) -> bytes:
     draw_line(f"Records: {len(rows)}")
     draw_line("")
     draw_line("Connectivity per operator:")
-    for key, value in stats["connectivity_per_operator"].items():
-        draw_line(f"  {key}: {value}")
+    for key, value in stats["operator_time"].items():
+        draw_line(f"  {key}: {value:.2f}%")
     draw_line("Connectivity per network type:")
-    for key, value in stats["connectivity_per_network_type"].items():
-        draw_line(f"  {key}: {value}")
+    for key, value in stats["network_type_time"].items():
+        draw_line(f"  {key}: {value:.2f}%")
     draw_line("Average signal per network type:")
-    for key, value in stats["avg_signal_per_network_type"].items():
+    for key, value in stats["avg_signal_per_type"].items():
         draw_line(f"  {key}: {value} dBm")
     draw_line("Recent samples:")
     for row in rows[-15:]:
@@ -2219,4 +2202,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)

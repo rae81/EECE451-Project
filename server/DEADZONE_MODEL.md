@@ -232,7 +232,7 @@ python deadzone_model.py \
 ### 3. Start the backend with the trained artifact
 
 ```bash
-export DEADZONE_MODEL_PATH=/home/ramieid/Desktop/451proj/server/instance/ml/deadzone_model.joblib
+export DEADZONE_MODEL_PATH="$(pwd)/instance/ml/deadzone_model.joblib"
 flask --app app run --host 0.0.0.0 --port 5000
 ```
 

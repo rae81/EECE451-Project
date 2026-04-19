@@ -237,7 +237,7 @@ def test_flask_predict_and_heatmap_include_deadzone_scores(tmp_path):
     app.config["DEADZONE_MODEL_PATH"] = str(model_path)
 
     response = client.post(
-        "/receive-data",
+        "/api/cell/ingest",
         json={
             "device_id": "phone-1",
             "operator": "Alfa",
