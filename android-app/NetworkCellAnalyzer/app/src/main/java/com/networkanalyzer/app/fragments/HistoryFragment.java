@@ -42,8 +42,7 @@ import retrofit2.Response;
 /**
  * Paginated list of stored cell-data readings backed by the server's
  * {@code /api/history} endpoint with a Room cache for offline viewing.
- * Also hosts the CSV export button that calls {@code /api/export.csv}.
- * Part of the 10% "statistical service" graded feature.
+ * Hosts the CSV export button that calls {@code /api/export.csv}.
  */
 public class HistoryFragment extends Fragment {
 

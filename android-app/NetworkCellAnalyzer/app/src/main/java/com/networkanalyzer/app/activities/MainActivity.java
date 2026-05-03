@@ -38,22 +38,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Primary container activity for the application.
- * <p>
- * Hosts a bottom-navigation shell for the four primary screens
+ * Primary container activity. Hosts the bottom-navigation shell
  * (Dashboard, Map, Analytics, History) and a side drawer for secondary
- * tools (Speed Test, Tower Clusters, Diagnostics, Settings).
- */
-/**
- * Top-level activity hosting the bottom-navigation and navigation
- * drawer that switch between the Dashboard, Statistics, History,
- * Heatmap, Diagnostics, Speed-Test, and Tower-Clusters fragments.
- * <p>
- * Responsible for starting {@link com.networkanalyzer.app.services.CellMonitorService}
- * on launch (so cell-info polling runs in the foreground) and for
- * requesting the runtime permissions needed by the TelephonyManager
- * API (READ_PHONE_STATE, ACCESS_FINE_LOCATION,
- * ACCESS_BACKGROUND_LOCATION).
+ * tools (Speed Test, Tower Clusters, Diagnostics, Settings). Starts
+ * {@link com.networkanalyzer.app.services.CellMonitorService} on launch
+ * and requests the runtime permissions needed by TelephonyManager
+ * (READ_PHONE_STATE, ACCESS_FINE_LOCATION, ACCESS_BACKGROUND_LOCATION).
  */
 public class MainActivity extends AppCompatActivity {
 

@@ -1,6 +1,6 @@
 # Network Cell Analyzer Server
 
-Clean Flask backend scaffold for the EECE 451 project.
+Flask + SQLAlchemy backend with a LightGBM dead-zone prediction service.
 
 ## Included
 - `app.py`: Flask app, routes, validation, and stats logic

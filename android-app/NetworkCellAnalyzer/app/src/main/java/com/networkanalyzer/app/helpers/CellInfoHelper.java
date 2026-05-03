@@ -28,35 +28,18 @@ import java.lang.reflect.Method;
 
 /**
  * Static helper that converts Android {@link CellInfo} objects into the
- * application's {@link CellDataEntry} model.
- * <p>
- * Handles the four main cell technology families:
+ * application's {@link CellDataEntry} model. Handles the four main cell
+ * technology families:
  * <ul>
- *     <li><b>GSM (2G)</b> -- {@link CellInfoGsm}</li>
- *     <li><b>WCDMA (3G)</b> -- {@link CellInfoWcdma}</li>
- *     <li><b>LTE (4G)</b> -- {@link CellInfoLte}</li>
- *     <li><b>NR (5G)</b> -- {@link CellInfoNr} (API 29+)</li>
+ *     <li>GSM (2G) — {@link CellInfoGsm}</li>
+ *     <li>WCDMA (3G) — {@link CellInfoWcdma}</li>
+ *     <li>LTE (4G) — {@link CellInfoLte}</li>
+ *     <li>NR (5G) — {@link CellInfoNr} (API 29+)</li>
  * </ul>
  * <p>
- * All methods are null-safe and treat {@link Integer#MAX_VALUE} (the sentinel
+ * Methods are null-safe and treat {@link Integer#MAX_VALUE} (the sentinel
  * used by the telephony framework for unavailable values) as "not available",
  * substituting {@code -999} for numeric fields or {@code "N/A"} for strings.
- */
-/**
- * Queries the serving + neighbor cell-info for 2G (GSM), 3G (WCDMA),
- * 4G (LTE) and 5G (NR) radios and normalises the result into a single
- * {@link CellDataEntry}. This is the class that implements the 30%
- * "2G/3G/4G cell-info querying" graded requirement of the EECE 451
- * project brief.
- * <p>
- * Signal-strength conversions (dBm for LTE RSRP, asu-to-dBm for GSM
- * RSSI, etc.) follow the Android {@code TelephonyManager} /
- * {@link android.telephony.CellInfo} documentation:
- * <ul>
- *   <li>https://developer.android.com/reference/android/telephony/TelephonyManager
- *   <li>https://developer.android.com/reference/android/telephony/CellInfo
- *   <li>https://developer.android.com/reference/android/telephony/CellSignalStrengthLte
- * </ul>
  */
 public final class CellInfoHelper {
 

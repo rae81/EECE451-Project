@@ -20,23 +20,16 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
- * OkHttp Interceptor that handles Bearer token authentication.
- * <p>
- * - Adds "Authorization: Bearer &lt;token&gt;" header to all requests except auth endpoints.
- * - On 401 responses, attempts to refresh the token using the stored refresh token.
- * - If the refresh succeeds, retries the original request with the new token.
- * - If the refresh fails, clears all stored tokens so the user must re-login.
- * - Token refresh is synchronized to prevent concurrent refresh attempts.
- */
-/**
  * OkHttp interceptor that attaches the current access token to outgoing
  * requests and transparently refreshes it on a 401 response.
- * <p>
- * Implements the classic "authenticator" pattern from the OkHttp
- * documentation — see
- * https://square.github.io/okhttp/features/interceptors/ — without
- * using {@link okhttp3.Authenticator} because the server uses signed
- * {@code itsdangerous} tokens rather than HTTP challenge/response.
+ * <ul>
+ *   <li>Adds {@code Authorization: Bearer &lt;token&gt;} except on auth endpoints.</li>
+ *   <li>On 401, refreshes via the stored refresh token and retries the original request.</li>
+ *   <li>On refresh failure, clears stored tokens to force re-login.</li>
+ *   <li>Refresh is synchronized to prevent concurrent token swaps.</li>
+ * </ul>
+ * Custom path (rather than {@link okhttp3.Authenticator}) because the
+ * server uses signed {@code itsdangerous} tokens, not HTTP challenge.
  */
 public class AuthInterceptor implements Interceptor {
 

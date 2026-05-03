@@ -23,30 +23,10 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
- * Singleton Retrofit client for the NetworkCellAnalyzer app.
- * <p>
- * Provides a configured {@link ApiService} instance with:
- * <ul>
- *   <li>OkHttpClient with logging interceptor (DEBUG builds)</li>
- *   <li>{@link AuthInterceptor} for automatic Bearer token management</li>
- *   <li>30-second connect / read / write timeouts</li>
- *   <li>TLS/SSL configuration</li>
- *   <li>Dynamic base URL support (reads from SharedPreferences)</li>
- * </ul>
- */
-/**
- * Singleton factory for the Retrofit-backed {@link ApiService}.
- * <p>
- * Wires an OkHttp client with a timeout profile sized for mobile
- * networks and attaches the {@link AuthInterceptor} so every outgoing
- * request carries a fresh bearer token.
- * <p>
- * References:
- * <ul>
- *   <li>Retrofit: https://square.github.io/retrofit/
- *   <li>OkHttp:   https://square.github.io/okhttp/
- *   <li>Retrofit converter-gson: https://github.com/square/retrofit/tree/master/retrofit-converters/gson
- * </ul>
+ * Singleton factory for the Retrofit-backed {@link ApiService}. Wires an
+ * OkHttp client with a 30-second timeout profile, the
+ * {@link AuthInterceptor} for bearer-token management, an HTTP logger on
+ * DEBUG builds, and a dynamic base URL read from SharedPreferences.
  */
 public class RetrofitClient {
 

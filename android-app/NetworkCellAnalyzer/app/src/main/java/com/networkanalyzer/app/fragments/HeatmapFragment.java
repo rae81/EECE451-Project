@@ -45,20 +45,12 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 /**
- * Geospatial signal-coverage visualisation. Pulls aggregated buckets
- * from {@code /api/heatmap-data} and renders them through an embedded
+ * Geospatial coverage visualisation. Pulls aggregated buckets from
+ * {@code /api/heatmap-data} and renders them through an embedded
  * {@link android.webkit.WebView} running a Leaflet + Leaflet.heat
- * template; the fragment also overlays dead-zone predictions fetched
- * from {@code /api/deadzone/predict/batch}.
- * <p>
- * Extra (non-required) feature. References:
- * <ul>
- *   <li>Leaflet — https://leafletjs.com/ (BSD-2-Clause)
- *   <li>Leaflet.heat — https://github.com/Leaflet/Leaflet.heat (BSD-2-Clause)
- *   <li>OpenStreetMap tile policy — https://operations.osmfoundation.org/policies/tiles/
- * </ul>
- * The server aggregation uses H3-style lat/lon bucketing; see
- * {@code _aggregate_heatmap_rows} in {@code server/app.py}.
+ * template; also overlays dead-zone predictions fetched from
+ * {@code /predict/batch}. The server aggregation uses H3-style lat/lon
+ * bucketing — see {@code _aggregate_heatmap_rows} in {@code server/app.py}.
  */
 public class HeatmapFragment extends Fragment {
 
@@ -346,9 +338,9 @@ public class HeatmapFragment extends Fragment {
 
     private void loadTowerClusterData() {
         apiService.getTowerClusters(
-                preferenceManager.getDeviceId(),
+                null,
                 selectedNetworkType,
-                SERVER_POINT_LIMIT
+                15000
         ).enqueue(new Callback<TowerClustersResponse>() {
             @Override
             public void onResponse(@NonNull Call<TowerClustersResponse> call,
@@ -764,6 +756,22 @@ public class HeatmapFragment extends Fragment {
                     "map.fitBounds([[%f,%f],[%f,%f]],{padding:[18,18]});",
                     LEBANON_MIN_LAT, LEBANON_MIN_LNG, LEBANON_MAX_LAT, LEBANON_MAX_LNG
             );
+        } else if (currentMode == MapMode.TOWERS && !points.isEmpty()) {
+            double minLat = Double.POSITIVE_INFINITY, maxLat = Double.NEGATIVE_INFINITY;
+            double minLng = Double.POSITIVE_INFINITY, maxLng = Double.NEGATIVE_INFINITY;
+            for (MapPoint p : points) {
+                if (p.latitude < minLat) minLat = p.latitude;
+                if (p.latitude > maxLat) maxLat = p.latitude;
+                if (p.longitude < minLng) minLng = p.longitude;
+                if (p.longitude > maxLng) maxLng = p.longitude;
+            }
+            double latPad = Math.max(0.004, (maxLat - minLat) * 0.15);
+            double lngPad = Math.max(0.004, (maxLng - minLng) * 0.15);
+            fitBoundsJs = String.format(
+                    Locale.US,
+                    "map.fitBounds([[%f,%f],[%f,%f]],{paddingTopLeft:[24,210],paddingBottomRight:[24,180],maxZoom:16});",
+                    minLat - latPad, minLng - lngPad, maxLat + latPad, maxLng + lngPad
+            );
         } else if (currentMode == MapMode.RELIABILITY) {
             deadzoneGridJs.append(buildDeadzoneGridJs(points));
         }
@@ -803,9 +811,28 @@ public class HeatmapFragment extends Fragment {
                 + "background:#0F766E;border:2px solid #fff;border-radius:999px;"
                 + "box-shadow:0 2px 8px rgba(15,23,42,0.18);}"
                 + ".tower-marker svg{width:15px;height:15px;display:block;}"
+                + ".tower-emoji-marker{width:34px;height:34px;display:flex;align-items:center;justify-content:center;"
+                + "background:rgba(255,255,255,0.97);border:2px solid #0F766E;border-radius:999px;"
+                + "box-shadow:0 4px 12px rgba(15,23,42,0.22);}"
+                + ".tower-emoji-glyph{font-size:20px;line-height:1;display:block;"
+                + "font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji','Android Emoji',sans-serif;"
+                + "filter:drop-shadow(0 1px 1px rgba(15,23,42,0.25));}"
                 + ".deadzone-overlay,.predictive-overlay,.predictive-glow,.predictive-core,.signal-halo,.signal-core{pointer-events:none;}"
                 + ".predictive-glow,.predictive-core,.signal-halo,.signal-core{transition:fill-opacity 240ms ease,stroke-opacity 240ms ease;}"
                 + ".predictive-glow,.signal-halo{mix-blend-mode:multiply;}"
+                + ".predictive-legend{background:rgba(255,255,255,0.96);padding:9px 12px;border-radius:12px;"
+                + "box-shadow:0 10px 26px rgba(15,23,42,0.16);border:1px solid rgba(226,232,240,0.9);"
+                + "font-family:'Inter',-apple-system,sans-serif;color:#0F172A;margin:10px;}"
+                + ".predictive-legend .pl-title{font-weight:700;font-size:11px;letter-spacing:0.04em;"
+                + "text-transform:uppercase;color:#0F172A;margin-bottom:6px;}"
+                + ".predictive-legend .pl-row{display:flex;align-items:center;gap:6px;}"
+                + ".predictive-legend .pl-bar{width:110px;height:10px;border-radius:5px;"
+                + "background:linear-gradient(90deg,#059669 0%,#F59E0B 50%,#DC2626 100%);"
+                + "box-shadow:inset 0 0 0 1px rgba(15,23,42,0.1);}"
+                + ".predictive-legend .pl-lo{font-size:10px;font-weight:700;color:#047857;}"
+                + ".predictive-legend .pl-hi{font-size:10px;font-weight:700;color:#B91C1C;}"
+                + ".predictive-legend .pl-scale{display:flex;justify-content:space-between;margin-top:4px;"
+                + "font-size:9px;color:#64748B;font-weight:600;padding:0 18px;}"
                 + "</style>"
                 + "</head><body><div id='map'></div>"
                 + "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
@@ -829,31 +856,137 @@ public class HeatmapFragment extends Fragment {
 
     @NonNull
     private String buildPredictiveOverlayJs(@NonNull List<PredictionCell> cells) {
-        StringBuilder js = new StringBuilder();
-        js.append("var predictiveLayer=L.layerGroup().addTo(map);");
+        int total = PREDICTIVE_GRID_ROWS * PREDICTIVE_GRID_COLS;
+        Double[] riskGrid = new Double[total];
+        Double[] confGrid = new Double[total];
+        double cellHeight = (LEBANON_MAX_LAT - LEBANON_MIN_LAT) / PREDICTIVE_GRID_ROWS;
+        double cellWidth = (LEBANON_MAX_LNG - LEBANON_MIN_LNG) / PREDICTIVE_GRID_COLS;
+
         for (PredictionCell cell : cells) {
-            String color = predictiveColor(cell.deadzoneRisk);
-            double conf = cell.confidence == null ? 0.52 : cell.confidence;
-            double glowOpacity = (cell.deadzoneRisk >= 0.7 ? 0.13 : cell.deadzoneRisk >= 0.45 ? 0.10 : 0.07)
-                    * (0.55 + 0.45 * conf);
-            double coreOpacity = (cell.deadzoneRisk >= 0.7 ? 0.20 : cell.deadzoneRisk >= 0.45 ? 0.14 : 0.10)
-                    * (0.55 + 0.45 * conf);
             double centerLat = (cell.southLat + cell.northLat) / 2.0;
             double centerLng = (cell.westLng + cell.eastLng) / 2.0;
-            double radiusM = 3200.0 + (cell.deadzoneRisk * 1900.0) + ((conf - 0.5) * 700.0);
-            double glowRadiusM = radiusM * 1.35;
-            js.append(String.format(
-                    Locale.US,
-                    "L.circle([%f,%f],{pane:'predictivePane',radius:%.0f,color:'%s',weight:0,fillColor:'%s',fillOpacity:%.3f,className:'deadzone-overlay predictive-overlay predictive-glow'}).addTo(predictiveLayer);",
-                    centerLat, centerLng, glowRadiusM, color, color, glowOpacity
-            ));
-            js.append(String.format(
-                    Locale.US,
-                    "L.circle([%f,%f],{pane:'predictivePane',radius:%.0f,color:'%s',weight:1,opacity:%.3f,fillColor:'%s',fillOpacity:%.3f,className:'deadzone-overlay predictive-overlay predictive-core'}).addTo(predictiveLayer);",
-                    centerLat, centerLng, radiusM, color, Math.min(0.34, glowOpacity + 0.08), color, coreOpacity
-            ));
+            int row = (int) Math.round((centerLat - LEBANON_MIN_LAT) / cellHeight - 0.5);
+            int col = (int) Math.round((centerLng - LEBANON_MIN_LNG) / cellWidth - 0.5);
+            if (row < 0 || row >= PREDICTIVE_GRID_ROWS
+                    || col < 0 || col >= PREDICTIVE_GRID_COLS) {
+                continue;
+            }
+            int idx = row * PREDICTIVE_GRID_COLS + col;
+            riskGrid[idx] = cell.deadzoneRisk;
+            confGrid[idx] = cell.confidence == null ? 0.6 : cell.confidence;
         }
-        return js.toString();
+
+        for (int iter = 0; iter < 10; iter++) {
+            boolean anyMissing = false;
+            for (int i = 0; i < total; i++) {
+                if (riskGrid[i] == null) {
+                    anyMissing = true;
+                    break;
+                }
+            }
+            if (!anyMissing) break;
+            Double[] nextRisk = riskGrid.clone();
+            Double[] nextConf = confGrid.clone();
+            for (int r = 0; r < PREDICTIVE_GRID_ROWS; r++) {
+                for (int c = 0; c < PREDICTIVE_GRID_COLS; c++) {
+                    int i = r * PREDICTIVE_GRID_COLS + c;
+                    if (riskGrid[i] != null) continue;
+                    double sumR = 0, sumC = 0;
+                    int n = 0;
+                    for (int dr = -1; dr <= 1; dr++) {
+                        for (int dc = -1; dc <= 1; dc++) {
+                            if (dr == 0 && dc == 0) continue;
+                            int rr = r + dr, cc = c + dc;
+                            if (rr < 0 || rr >= PREDICTIVE_GRID_ROWS
+                                    || cc < 0 || cc >= PREDICTIVE_GRID_COLS) continue;
+                            int j = rr * PREDICTIVE_GRID_COLS + cc;
+                            if (riskGrid[j] == null) continue;
+                            sumR += riskGrid[j];
+                            sumC += confGrid[j];
+                            n++;
+                        }
+                    }
+                    if (n > 0) {
+                        nextRisk[i] = sumR / n;
+                        nextConf[i] = sumC / n;
+                    }
+                }
+            }
+            riskGrid = nextRisk;
+            confGrid = nextConf;
+        }
+        for (int i = 0; i < total; i++) {
+            if (riskGrid[i] == null) { riskGrid[i] = 0.5; confGrid[i] = 0.5; }
+        }
+
+        StringBuilder riskJs = new StringBuilder("[");
+        StringBuilder confJs = new StringBuilder("[");
+        for (int i = 0; i < total; i++) {
+            if (i > 0) { riskJs.append(','); confJs.append(','); }
+            riskJs.append(String.format(Locale.US, "%.4f", riskGrid[i]));
+            confJs.append(String.format(Locale.US, "%.4f", confGrid[i]));
+        }
+        riskJs.append(']');
+        confJs.append(']');
+
+        String polyJs = "[[34.692,35.980],[34.660,36.100],[34.650,36.310],[34.440,36.580],"
+                + "[34.100,36.620],[33.800,36.450],[33.600,36.250],[33.500,36.050],"
+                + "[33.400,35.900],[33.260,35.880],[33.150,35.770],[33.080,35.600],"
+                + "[33.085,35.350],[33.095,35.130],[33.270,35.195],[33.420,35.280],"
+                + "[33.560,35.370],[33.720,35.450],[33.895,35.485],[34.015,35.620],"
+                + "[34.120,35.655],[34.260,35.660],[34.370,35.740],[34.440,35.830],"
+                + "[34.570,35.950],[34.692,35.980]]";
+
+        return "(function(){"
+                + "var ROWS=" + PREDICTIVE_GRID_ROWS + ",COLS=" + PREDICTIVE_GRID_COLS + ";"
+                + "var GRID=" + riskJs + ";"
+                + "var CONF=" + confJs + ";"
+                + "var POLY=" + polyJs + ";"
+                + "var S=" + LEBANON_MIN_LAT + ",N=" + LEBANON_MAX_LAT + ","
+                + "WL=" + LEBANON_MIN_LNG + ",EL=" + LEBANON_MAX_LNG + ";"
+                + "var WP=640,HP=540;"
+                + "var canvas=document.createElement('canvas');canvas.width=WP;canvas.height=HP;"
+                + "var ctx=canvas.getContext('2d');"
+                + "var imgData=ctx.createImageData(WP,HP);var data=imgData.data;"
+                + "function inPoly(la,lo){var inside=false,n=POLY.length,j=n-1;"
+                + "for(var i=0;i<n;i++){var li=POLY[i][0],oi=POLY[i][1],lj=POLY[j][0],oj=POLY[j][1];"
+                + "if(((li>la)!=(lj>la))&&(lo<(oj-oi)*(la-li)/(lj-li+1e-12)+oi))inside=!inside;"
+                + "j=i;}return inside;}"
+                + "function riskColor(v){var r,g,b,t;"
+                + "if(v<0.5){t=v/0.5;r=Math.round(5+t*240);g=Math.round(150+t*8);b=Math.round(105-t*94);}"
+                + "else{t=(v-0.5)/0.5;r=Math.round(245-t*25);g=Math.round(158-t*120);b=Math.round(11+t*27);}"
+                + "return[r,g,b];}"
+                + "for(var y=0;y<HP;y++){"
+                + "var la=N-(y/(HP-1))*(N-S);"
+                + "var gy=((HP-1-y)/(HP-1))*(ROWS-1);"
+                + "var r0=Math.floor(gy),r1=Math.min(r0+1,ROWS-1);var fy=gy-r0;"
+                + "for(var x=0;x<WP;x++){"
+                + "var lo=WL+(x/(WP-1))*(EL-WL);"
+                + "var idx=(y*WP+x)*4;"
+                + "if(!inPoly(la,lo)){data[idx+3]=0;continue;}"
+                + "var gx=(x/(WP-1))*(COLS-1);"
+                + "var c0=Math.floor(gx),c1=Math.min(c0+1,COLS-1);var fx=gx-c0;"
+                + "var v00=GRID[r0*COLS+c0],v01=GRID[r0*COLS+c1],"
+                + "v10=GRID[r1*COLS+c0],v11=GRID[r1*COLS+c1];"
+                + "var v=v00*(1-fx)*(1-fy)+v01*fx*(1-fy)+v10*(1-fx)*fy+v11*fx*fy;"
+                + "var k00=CONF[r0*COLS+c0],k01=CONF[r0*COLS+c1],"
+                + "k10=CONF[r1*COLS+c0],k11=CONF[r1*COLS+c1];"
+                + "var cf=k00*(1-fx)*(1-fy)+k01*fx*(1-fy)+k10*(1-fx)*fy+k11*fx*fy;"
+                + "var rgb=riskColor(v);"
+                + "data[idx]=rgb[0];data[idx+1]=rgb[1];data[idx+2]=rgb[2];"
+                + "data[idx+3]=Math.max(110,Math.min(225,Math.round(160+(cf-0.5)*80)));"
+                + "}}"
+                + "ctx.putImageData(imgData,0,0);"
+                + "L.imageOverlay(canvas.toDataURL(),[[S,WL],[N,EL]],{pane:'predictivePane',opacity:0.82,interactive:false}).addTo(map);"
+                + "L.polyline(POLY.concat([POLY[0]]),{color:'#0F172A',weight:1.1,opacity:0.35,interactive:false,pane:'predictivePane'}).addTo(map);"
+                + "var lg=L.control({position:'bottomright'});"
+                + "lg.onAdd=function(){var d=L.DomUtil.create('div','predictive-legend');"
+                + "d.innerHTML='<div class=\"pl-title\">Dead-zone risk</div>"
+                + "<div class=\"pl-row\"><span class=\"pl-lo\">Low</span>"
+                + "<div class=\"pl-bar\"></div><span class=\"pl-hi\">High</span></div>"
+                + "<div class=\"pl-scale\"><span>0%</span><span>50%</span><span>100%</span></div>';"
+                + "return d;};lg.addTo(map);"
+                + "})();";
     }
 
     @NonNull
@@ -931,7 +1064,7 @@ public class HeatmapFragment extends Fragment {
             return "L.marker(["
                     + point.latitude + "," + point.longitude + "],{icon:L.divIcon({className:'',html:'"
                     + buildTowerIconHtml(fillColor)
-                    + "',iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-12]})})"
+                    + "',iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-16]})})"
                     + ".addTo(map).bindPopup('" + popup + "');";
         }
         int radius = radiusForPoint(point);
@@ -995,14 +1128,10 @@ public class HeatmapFragment extends Fragment {
 
     @NonNull
     private String buildTowerIconHtml(@NonNull String fillColor) {
-        String svg = "<div class=&quot;tower-marker&quot; style=&quot;background:" + fillColor + "&quot;>"
-                + "<svg viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>"
-                + "<path d=&quot;M12 3L8.5 21H10.9L12 15.6L13.1 21H15.5L12 3Z&quot; fill=&quot;white&quot;/>"
-                + "<path d=&quot;M7 9L12 12L17 9&quot; stroke=&quot;white&quot; stroke-width=&quot;1.7&quot; stroke-linecap=&quot;round&quot;/>"
-                + "<path d=&quot;M5.5 6.5L12 10.2L18.5 6.5&quot; stroke=&quot;white&quot; stroke-width=&quot;1.5&quot; stroke-linecap=&quot;round&quot;/>"
-                + "<circle cx=&quot;12&quot; cy=&quot;5&quot; r=&quot;1.4&quot; fill=&quot;white&quot;/>"
-                + "</svg></div>";
-        return escapeJs(svg);
+        String html = "<div class=\"tower-emoji-marker\" style=\"border-color:" + fillColor + ";\">"
+                + "<span class=\"tower-emoji-glyph\">\uD83D\uDCE1</span>"
+                + "</div>";
+        return escapeJs(html);
     }
 
     private int reliabilityFromServerPoint(int signalPower, int sampleCount, @Nullable Double avgSnr) {
@@ -1076,13 +1205,6 @@ public class HeatmapFragment extends Fragment {
         if (score >= 55) return "#D97706";
         if (score >= 40) return "#EA580C";
         return "#DC2626";
-    }
-
-    @NonNull
-    private String predictiveColor(double deadzoneRisk) {
-        if (deadzoneRisk >= 0.7) return "#B91C1C";
-        if (deadzoneRisk >= 0.45) return "#EA580C";
-        return "#059669";
     }
 
     @NonNull

@@ -36,22 +36,12 @@ import retrofit2.Response;
 
 /**
  * WorkManager {@link Worker} that periodically syncs locally stored cell
- * data to the remote server.
- * <p>
- * The worker queries all unsynced {@link CellDataEntity} entries from
- * Room, converts them to a {@link BatchCellDataRequest}, sends them via
- * {@link ApiService#sendBatchCellData(BatchCellDataRequest)}, and marks
- * them as synced upon success. Scheduled to run every 15 minutes when a
- * network connection is available — the 15-minute floor is a hard
- * WorkManager constraint for periodic work (see the docs below).
- * <p>
- * References:
- * <ul>
- *   <li>WorkManager guide:
- *       https://developer.android.com/topic/libraries/architecture/workmanager
- *   <li>PeriodicWorkRequest minimum interval:
- *       https://developer.android.com/reference/androidx/work/PeriodicWorkRequest
- * </ul>
+ * data to the remote server. Queries unsynced {@link CellDataEntity}
+ * entries from Room, converts them to a {@link BatchCellDataRequest},
+ * sends them via {@link ApiService#sendBatchCellData(BatchCellDataRequest)},
+ * and marks them as synced on success. Scheduled every 15 minutes when a
+ * network is available (15-minute floor is a WorkManager periodic-work
+ * constraint).
  */
 public class OfflineSyncWorker extends Worker {
 

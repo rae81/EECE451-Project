@@ -32,27 +32,12 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 /**
- * Handles user authentication -- both login and registration.
- * <p>
- * The single screen toggles between a <b>Login</b> mode and a <b>Register</b>
- * mode. In login mode the user provides email and password; in register mode
- * additional fields for name and password confirmation are shown.
- * <p>
- * On successful authentication the JWT token returned by the server is
- * persisted via {@link PreferenceManager} and the user is forwarded to
- * {@link MainActivity}.
- * <p>
- * If biometric login was previously enabled, a fingerprint / face prompt is
- * offered as an alternative to password entry.
- */
-/**
- * Sign-in / sign-up screen. Talks to the Flask server's {@code
- * /auth/login}, {@code /auth/register}, and {@code /auth/refresh}
- * endpoints and persists the resulting tokens in
- * {@link com.networkanalyzer.app.utils.PreferenceManager}.
- * <p>
- * Optional biometric unlock is backed by AndroidX Biometric — see
- * https://developer.android.com/jetpack/androidx/releases/biometric .
+ * Sign-in / sign-up screen. Talks to {@code /auth/login},
+ * {@code /auth/register} and {@code /auth/refresh}, persists the
+ * resulting tokens in {@link PreferenceManager}, and forwards to
+ * {@link MainActivity} on success. Toggles between login and register
+ * modes within the same screen; optional biometric unlock is backed by
+ * AndroidX Biometric.
  */
 public class LoginActivity extends AppCompatActivity {
 

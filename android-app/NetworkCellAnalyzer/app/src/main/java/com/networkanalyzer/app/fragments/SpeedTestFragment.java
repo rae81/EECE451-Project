@@ -55,19 +55,10 @@ import okhttp3.Response;
 import retrofit2.Call;
 
 /**
- * Network speed-test fragment — measures download throughput, upload
- * throughput, and round-trip latency against our own Flask server's
- * {@code /speedtest/download} + {@code /speedtest/upload} endpoints,
- * using the well-known "fetch N MB chunk, time the byte stream, ignore
- * the first connection-setup window" pattern used by Ookla,
- * speedtest-cli, and Cloudflare's {@code speed.cloudflare.com}.
- * <p>
- * Extra (non-required) feature. References:
- * <ul>
- *   <li>speedtest-cli (Apache-2.0) — https://github.com/sivel/speedtest-cli
- *   <li>Cloudflare speed-test client — https://github.com/cloudflare/speedtest
- *   <li>OkHttp streaming body pattern — https://square.github.io/okhttp/recipes/
- * </ul>
+ * Measures download throughput, upload throughput and round-trip latency
+ * against the Flask server's {@code /speedtest/download} +
+ * {@code /speedtest/upload} endpoints. Streams a fixed-size chunk and
+ * times the byte stream, discarding the connection-setup window.
  */
 public class SpeedTestFragment extends Fragment {
 

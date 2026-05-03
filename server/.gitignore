@@ -3,8 +3,8 @@ instance/
 .venv/
 *.pyc
 
-# Keep the shipped model bundle + training reports in git so deployments
-# have a ready-to-serve model without re-running training.
+# Keep the shipped model bundle + training reports so deployments have a
+# ready-to-serve model without re-running training.
 !instance/
 !instance/ml/
 !instance/ml/deadzone_model.joblib
@@ -13,15 +13,12 @@ instance/
 !instance/ml/reports/*.json
 !instance/ml/reports/*.png
 
-# Local Flask SQLite dev database; never commit to git.
+# Local Flask SQLite dev database
 instance/*.db
 instance/*.sqlite
 instance/*.sqlite3
 
-# Large external transfer datasets stay out of the repo; they live on
-# Drive and are copied into DATA_DIR at notebook runtime (section 0e).
+# External transfer datasets stay out of the repo
 cellular_dataframe.parquet
 opencellid_berlin_262.csv.gz
-EECE451_DeadZone*.zip
 _drive_tmp/
-

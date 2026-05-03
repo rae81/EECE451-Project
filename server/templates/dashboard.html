@@ -66,7 +66,7 @@
       <section class="hero-card" id="overview">
         <div class="hero-grid">
           <div>
-            <p class="eyebrow">EECE 451 Server Command Center</p>
+            <p class="eyebrow">Server Command Center</p>
             <h1>Network Cell Analyzer</h1>
             <p class="hero-copy">Live operations dashboard for authenticated ingest, backend analytics, heatmap aggregation, exports, speed tests, and device-level monitoring across your Android deployment.</p>
             <p class="hero-meta">This page is the operator-facing summary of the same backend contract the Android app now uses for auth, upload, stats, history, heatmap, exports, and speed tests.</p>
@@ -244,8 +244,8 @@
                 <td>{{ device.device_vendor }}</td>
                 <td>{{ device.ip_address or "—" }}<br><small class="metric-label">{{ device.mac_formatted or "MAC unavailable" }}</small></td>
                 <td><small>{{ device.device_id[:8] }}…</small></td>
-                <td>{{ device.first_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ device.first_seen | local_time }}</td>
+                <td>{{ device.last_seen | local_time }}</td>
                 <td>
                   <span class="status-pill {{ 'active' if device.is_active else 'inactive' }}">
                     {{ 'Active' if device.is_active else 'Idle' }}
@@ -289,7 +289,7 @@
             <tbody>
               {% for record in recent_records %}
               <tr>
-                <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ record.timestamp | local_time }}</td>
                 <td>{{ record.device_id }}</td>
                 <td>{{ record.operator }}</td>
                 <td>{{ record.network_type }}</td>

@@ -36,21 +36,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Utility class for exporting cell data to CSV and PDF files and sharing them.
- * <p>
- * On Android 10+ (API 29+), files are written via {@link MediaStore} for
- * scoped-storage compliance per the Android docs
- * (https://developer.android.com/training/data-storage). On earlier
- * versions, files are written directly to the Downloads directory.
- * <p>
- * References:
- * <ul>
- *   <li>CSV formatting: RFC 4180 "Common Format and MIME Type for CSV Files"
- *       — https://datatracker.ietf.org/doc/html/rfc4180
- *   <li>PDF generation: iText 7 Core (AGPL / commercial dual-license) —
- *       https://kb.itextpdf.com/itext/examples-itext7
- *   <li>MediaStore API: https://developer.android.com/reference/android/provider/MediaStore
- * </ul>
+ * Exports cell data to CSV (RFC 4180) and PDF and hands the result off to
+ * a share intent. On Android 10+ (API 29+) files are written through
+ * {@link MediaStore} for scoped-storage compliance; on earlier versions
+ * they go straight to the Downloads directory.
  */
 public final class ExportHelper {
 

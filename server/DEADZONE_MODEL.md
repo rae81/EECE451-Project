@@ -259,8 +259,6 @@ curl "http://127.0.0.1:5000/api/heatmap-data?device_id=<your-device-id>"
 
 ## Practical recommendation
 
-For your submission/demo:
-
 - train one Lebanon model first
 - prioritize exact `Alfa 4G` and `Touch 4G` subgroup variants inside the artifact
 - keep the global model as fallback for other RATs

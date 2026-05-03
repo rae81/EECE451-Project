@@ -49,6 +49,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from config import Config
 from deadzone_model import predict_deadzone
 from device_identity import enrich_device_rows, resolve_device_label
+from lebanon_geometry import is_in_lebanon
 from models import AlertRule, CellData, DeviceLog, NeighborCellData, SpeedTestResult, User, db
 
 
@@ -79,7 +80,24 @@ def create_app(config_object=Config) -> Flask:
 
     register_routes(app)
     register_cli(app)
+    _register_template_filters(app)
     return app
+
+
+def _register_template_filters(app: Flask) -> None:
+    def local_time(value, fmt: str = "%Y-%m-%d %H:%M:%S"):
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return value
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(ZoneInfo(app.config["TIMEZONE"])).strftime(fmt)
+
+    app.jinja_env.filters["local_time"] = local_time
 
 
 def register_routes(app: Flask) -> None:
@@ -212,6 +230,13 @@ def register_routes(app: Flask) -> None:
             nt = pt.get("network_type", "")
             if lat is None or lng is None:
                 results.append({"error": "missing coordinates"})
+                continue
+            # Mask grid points that fall outside Lebanon's land polygon
+            # so the Android heatmap overlay stops drawing circles over
+            # the Mediterranean / Syria / Israel, where the model has
+            # neither towers nor training data.
+            if not is_in_lebanon(float(lat), float(lng)):
+                results.append({"latitude": lat, "longitude": lng, "error": "outside_lebanon"})
                 continue
             prediction = _predict_signal_quality(
                 latitude=lat,
@@ -592,6 +617,7 @@ def register_routes(app: Flask) -> None:
             network_type=request.args.get("network_type"),
             require_location=True,
             limit=_parse_limit(request.args.get("limit"), default=5000, maximum=10000),
+            newest_first=True,
         )
         if isinstance(rows, tuple):
             return jsonify(rows[0]), rows[1]
@@ -626,6 +652,7 @@ def register_routes(app: Flask) -> None:
             network_type=request.args.get("network_type"),
             require_location=True,
             limit=_parse_limit(request.args.get("limit"), default=5000, maximum=15000),
+            newest_first=True,
         )
         if isinstance(rows, tuple):
             return jsonify(rows[0]), rows[1]
@@ -1378,6 +1405,7 @@ def _query_rows(
     network_type=None,
     require_location=False,
     limit=None,
+    newest_first=False,
 ):
     scoped_query = _base_query(
         device_id=device_id,
@@ -1399,13 +1427,19 @@ def _query_rows(
     if end_dt < start_dt:
         return {"error": "end must be after start"}, 400
 
+    # When a limit is applied and the caller wants the freshest rows,
+    # sort DESC, truncate, then flip back to ASC so downstream aggregators
+    # see the conventional chronological order.
+    sort_column = CellData.timestamp.desc() if newest_first else CellData.timestamp.asc()
     query = scoped_query.filter(and_(CellData.timestamp >= start_dt, CellData.timestamp <= end_dt)).order_by(
-        CellData.timestamp.asc()
+        sort_column
     )
     if limit:
         query = query.limit(limit)
 
     filtered_rows = query.all()
+    if newest_first:
+        filtered_rows.reverse()
     if not filtered_rows:
         return {"message": "No data found in the requested time range"}, 404
 

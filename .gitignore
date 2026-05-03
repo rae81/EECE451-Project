@@ -7,9 +7,8 @@ repo.txt
 context.txt
 TEMP_CONTEXT.md
 
-# Local reference/archive material not needed in source repo
+# Local reference / archive material
 ref/
-EECE451_Project_Plan.html
 VM_PHONE_SETUP.txt
 
 # Python
