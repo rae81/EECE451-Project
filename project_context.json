@@ -1,0 +1,596 @@
+{
+  "$schema_note": "EECE 451 Network Cell Analyzer — exhaustive project context for offline LLM coaching of the 4 presenters. Every field is a compact but complete description of a real file, module, class, function, endpoint, or concept in this repository. Feed this whole JSON to an LLM along with the question you want to prepare, and the model will have full system context without re-reading the codebase.",
+  "project": {
+    "name": "Network Cell Analyzer",
+    "course": "EECE 451 — Computer Networks (AUB)",
+    "team_size": 4,
+    "root": "/home/ramieid/Desktop/451proj",
+    "one_line_pitch": "Android app that continuously samples cellular signal metrics (2G/3G/4G/5G) with GPS, sends them to a Flask+SQLAlchemy+SocketIO server that aggregates fleet-wide telemetry, renders a live dashboard and heatmap, and fuses the data with OpenCelliD / Ookla / OSM / SRTM through a dual-head LightGBM dead-zone predictor validated on Berlin V2X.",
+    "pillars": [
+      "Android native (Java) foreground collector + offline sync queue.",
+      "Flask REST + WebSocket server with SQLAlchemy ORM and JWT-style tokens.",
+      "Web dashboard (Flask templates + Chart.js + Leaflet).",
+      "Dead-zone prediction ML pipeline (LightGBM dual model, Snorkel weak supervision, SHAP explanations, Sionna RT optional)."
+    ],
+    "lines_of_code_summary": {
+      "server_python_lines_approx": 10000,
+      "android_java_lines_approx": 8000,
+      "total_tracked_lines_approx": 18000,
+      "largest_single_file": "server/app.py (2205 lines)",
+      "second_largest": "server/deadzone_model.py (2031 lines)",
+      "android_largest": "fragments/HeatmapFragment.java (1462 lines)"
+    }
+  },
+
+  "directory_structure": {
+    "top_level": [
+      "android-app/NetworkCellAnalyzer/   (Gradle project, Java, minSdk 24, compileSdk 34)",
+      "server/                              (Flask + SQLAlchemy + Flask-SocketIO backend)",
+      "figures/                             (rendered PNG figures for the report)",
+      "ANDROID_WIRELESS_DEBUG_SETUP.txt     (adb-over-WiFi runbook)",
+      "project_context.json                 (this file)"
+    ],
+    "android_tree": {
+      "app/src/main/AndroidManifest.xml": "permissions, activities, services, Maps API key placeholder",
+      "app/src/main/java/com/networkanalyzer/app/": {
+        "NetworkAnalyzerApp.java": "Application class — creates 3 notification channels, schedules OfflineSyncWorker.",
+        "activities/": ["SplashActivity.java (launcher)", "LoginActivity.java (login/register/biometric)", "MainActivity.java (Nav host + Drawer + BottomNav)"],
+        "fragments/": ["DashboardFragment.java", "DiagnosticsFragment.java", "HeatmapFragment.java", "HistoryFragment.java", "SettingsFragment.java", "SpeedTestFragment.java", "StatisticsFragment.java", "TowerClusterDetailFragment.java", "TowerClustersFragment.java"],
+        "services/": ["CellMonitorService.java (foreground location service, 10s polling)", "OfflineSyncWorker.java (WorkManager 15-min periodic flush)"],
+        "helpers/": ["CellInfoHelper.java (tech-specific CellInfo parser)", "HandoverDetector.java (ping-pong detector)"],
+        "network/": ["ApiService.java (Retrofit)", "AuthInterceptor.java (Bearer + refresh)", "RetrofitClient.java (singleton)", "models/ (all request/response POJOs)"],
+        "database/": ["AppDatabase.java (Room v4)", "CellDataDao.java", "CellDataEntity.java", "SpeedTestDao.java", "SpeedTestEntity.java"],
+        "utils/": ["Constants.java", "PreferenceManager.java", "NotificationHelper.java", "NetworkInsightEngine.java", "NetworkIdentityHelper.java", "AdaptiveMonitoringEngine.java", "ExportHelper.java"],
+        "adapters/": ["HistoryAdapter.java (RecyclerView)", "NeighborCellAdapter.java"],
+        "models/": ["CellDataEntry.java (thin POJO used by UI cards)"]
+      },
+      "app/src/main/res/": "layouts (activity_main.xml, fragment_*.xml), drawables, navigation/nav_graph.xml (9 destinations), values/colors.xml (Aurora palette: emerald #047857 + violet #7C3AED), xml/network_security_config.xml"
+    },
+    "server_tree": {
+      "app.py": "2205-line Flask app — all HTTP routes, WebSocket emitters, helpers, Click retrain CLI.",
+      "models.py": "SQLAlchemy models: CellData, NeighborCellData, DeviceLog, SpeedTestResult, AlertRule, User.",
+      "config.py": "Config class with env-var overrides; TestConfig subclass for tests.",
+      "device_identity.py": "OUI→vendor lookup, locally-administered MAC detection, device label resolution.",
+      "deadzone_model.py": "DeadzoneRuntime — load / train / predict (v2 BallTree fallback + v3 dual LightGBM).",
+      "deadzone_features.py": "NUMERIC_FEATURES_V3 (38), CATEGORICAL_FEATURES_V3 (5), FeatureContext, build_feature_row.",
+      "deadzone_propagation.py": "COST-231 Hata, FSPL, Lebanon frequency defaults per operator/tech.",
+      "deadzone_physics.py": "ITU-R P.1812 simplified + Bullington diffraction over SRTM — breaks COST-231 label leak.",
+      "deadzone_weak_supervision.py": "Snorkel-style 5 labeling functions + generative label model.",
+      "deadzone_data.py": "Dataset fusion: OpenCelliD + Ookla + OSM + SRTM + app measurements. Tiered labels.",
+      "deadzone_training.py": "Dual LightGBM trainer: regressor (log1p RSRP) + classifier. Spatial GroupKFold + Optuna.",
+      "deadzone_transfer.py": "Berlin V2X (Fraunhofer HHI, CC0) cross-city transfer validation.",
+      "deadzone_sionna.py": "Optional Sionna RT ray-traced RSRP prior (GPU only).",
+      "deadzone_explain.py": "SHAP TreeExplainer wrapper — produces human reason strings.",
+      "deadzonePM.ipynb": "Jupyter notebook driver for training/experiments.",
+      "templates/": ["dashboard.html (live fleet)", "device_stats.html (per-device profile)", "heatmap.html (Leaflet heatmap + risk markers)"],
+      "static/": "CSS + JS assets for the web pages.",
+      "tests/": "pytest suite — test_app.py end-to-end, test_deadzone_features.py, test_deadzone_model.py, test_deadzone_propagation.py.",
+      "requirements.txt / requirements-dev.txt": "Runtime + dev Python deps.",
+      "Procfile / render.yaml / gunicorn.conf.py": "Render.com deployment (web: gunicorn -c gunicorn.conf.py app:app).",
+      "API_CONTRACT.md": "Canonical REST contract (content-type, TZ, timestamps, every endpoint).",
+      "DEADZONE_MODEL.md": "Training recipe, dataset stats, metrics, explainability notes."
+    },
+    "figures_tree": {
+      "android/": "App screenshots for the report.",
+      "server/": "Dashboard / heatmap / stats screenshots.",
+      "dbpics/": "Database diagrams / table screenshots.",
+      "modelpics/": "Feature importance, ROC/PR, confusion matrix, calibration plots for the deadzone model."
+    }
+  },
+
+  "system_architecture": {
+    "flow_end_to_end": [
+      "1. On the phone, CellMonitorService (foreground) polls TelephonyManager every 10 s.",
+      "2. CellInfoHelper parses LTE/NR/WCDMA/GSM into a normalized record (dBm, SNR, cellId, tac, mcc/mnc).",
+      "3. HandoverDetector compares consecutive cellIds and flags ping-pong (≥3 swaps in 60 s window).",
+      "4. Location is enriched via LocationManager (GPS first, NETWORK fallback).",
+      "5. Record is persisted to Room (CellDataEntity synced=false) and POSTed to /api/cell/ingest with Bearer JWT.",
+      "6. On HTTP 201 the row is marked synced=true. Failures stay queued for OfflineSyncWorker.",
+      "7. OfflineSyncWorker (WorkManager, 15-min Periodic, NetworkType.CONNECTED) batches unsynced rows to /api/cell/ingest/batch.",
+      "8. Server _store_cell_payload validates, upserts DeviceLog, writes CellData+NeighborCellData rows.",
+      "9. Server _emit_realtime_updates publishes Socket.IO events: new_cell_data, dashboard_summary, signal_alert.",
+      "10. Web dashboard listens and updates KPIs + charts live; phone also listens to its own broadcast ACTION_CELL_DATA_UPDATED to refresh fragments.",
+      "11. Heatmap & predict endpoints call deadzone_model.predict_deadzone() → LightGBM dual head → risk + reasons.",
+      "12. HeatmapFragment renders a TileOverlay on Google Maps with colour coded by deadzone_risk.",
+      "13. History / Stats / Diagnostics / TowerClusters / SpeedTest fragments each call dedicated REST endpoints for their views."
+    ],
+    "tokens_and_auth": "itsdangerous URLSafeTimedSerializer issues an access token (24 h) and refresh token (30 d). AuthInterceptor attaches Bearer on every Retrofit call and transparently retries on HTTP 401 by POSTing /auth/refresh.",
+    "timezone_rule": "All server timestamps normalised to Asia/Beirut. Accepted input formats: '%d %b %Y %I:%M %p', ISO 8601, and epoch ms."
+  },
+
+  "server": {
+    "stack": {
+      "language": "Python 3.11+",
+      "framework": "Flask 3",
+      "orm": "SQLAlchemy 2 via Flask-SQLAlchemy",
+      "websockets": "Flask-SocketIO (eventlet worker)",
+      "auth": "itsdangerous URLSafeTimedSerializer (no session cookies — pure Bearer).",
+      "migrations": "db.create_all() on boot (SQLite dev) — no Alembic in this course scope.",
+      "prod_db": "PostgreSQL if DATABASE_URL set, else SQLite at instance/cell_data.db.",
+      "deployment": "Render.com — Procfile + render.yaml + gunicorn.conf.py (workers=2, worker_class=eventlet, timeout=120).",
+      "ml_stack": "numpy, pandas, scikit-learn, lightgbm, optuna, shap, scipy, joblib, h3, pyarrow, rasterio (SRTM), snorkel, rtree."
+    },
+    "config_class": {
+      "file": "server/config.py",
+      "fields": {
+        "SECRET_KEY": "env SECRET_KEY or 'dev-secret'",
+        "SQLALCHEMY_DATABASE_URI": "env DATABASE_URL or sqlite:///instance/cell_data.db",
+        "SQLALCHEMY_TRACK_MODIFICATIONS": "False",
+        "TIMEZONE": "Asia/Beirut",
+        "ACTIVE_DEVICE_MINUTES": 5,
+        "HEATMAP_DEFAULT_POINT_LIMIT": 1200,
+        "ACCESS_TOKEN_MAX_AGE_SECONDS": 86400,
+        "REFRESH_TOKEN_MAX_AGE_SECONDS": 2592000,
+        "DEADZONE_MODEL_PATH": "server/data/deadzone_runtime.joblib",
+        "MAPS_TILE_URL": "OSM tile server"
+      },
+      "TestConfig": "Subclass overriding DB to sqlite:///:memory: with StaticPool; used by pytest fixture in conftest.py."
+    },
+    "database_models": {
+      "file": "server/models.py",
+      "shared_handle": "db = SQLAlchemy()  (imported by app.py, bound in create_app).",
+      "CellData": {
+        "purpose": "One row per cell-info sample uploaded by a device.",
+        "columns": ["id (PK)", "device_id (FK DeviceLog.device_id via composite lookup)", "timestamp (DateTime UTC)", "operator_name", "mcc", "mnc", "network_type (2G|3G|4G|5G)", "cell_id (Long)", "tac", "signal_power (dBm)", "signal_quality (Excellent|Good|Fair|Poor|None)", "snr (float or null for GSM)", "latitude", "longitude", "accuracy_m", "band", "frequency_mhz", "channel_earfcn_nrarfcn", "is_ping_pong (Bool)"],
+        "serializer": "to_dict() → JSON dict used by /api/history etc.",
+        "relationships": "one-to-many CellData→NeighborCellData with cascade delete."
+      },
+      "NeighborCellData": {
+        "purpose": "Neighbors reported in the same sample (serving cell's rivals).",
+        "columns": ["id", "cell_data_id (FK CellData)", "cell_id", "pci", "rsrp", "rsrq", "network_type"]
+      },
+      "DeviceLog": {
+        "purpose": "Identity row per device — unique by device_id (Android_ID hash).",
+        "columns": ["device_id (PK)", "vendor", "model", "os_version", "app_version", "imei_prefix", "mac_address", "user_id (FK User)", "first_seen", "last_seen"],
+        "notes": "vendor/model are resolved via device_identity.resolve_vendor when MAC is non-random; otherwise fall back to TelephonyManager Build.MANUFACTURER."
+      },
+      "SpeedTestResult": {"purpose": "One row per speed test run.", "columns": ["id", "device_id", "timestamp", "download_mbps", "upload_mbps", "ping_ms", "server_name", "latitude", "longitude"]},
+      "AlertRule": {"purpose": "User-configured thresholds.", "columns": ["id", "user_id", "name", "metric (signal_power|snr)", "operator (<|>)", "threshold", "active"]},
+      "User": {"purpose": "Auth principal.", "columns": ["id (PK)", "email (unique)", "password_hash (werkzeug)", "display_name", "created_at"]}
+    },
+    "endpoints": [
+      {"path": "/auth/register", "method": "POST", "body": {"email": "str", "password": "str", "display_name": "str?"}, "response_201": {"access_token": "str", "refresh_token": "str", "user": "dict"}, "notes": "Creates User row; hashes password with werkzeug.security.generate_password_hash. Rejects if email exists (409)."},
+      {"path": "/auth/login", "method": "POST", "body": {"email": "str", "password": "str"}, "response_200": {"access_token": "str", "refresh_token": "str", "user": "dict"}, "notes": "Returns 401 on wrong creds, 404 on missing user."},
+      {"path": "/auth/refresh", "method": "POST", "body": {"refresh_token": "str"}, "response_200": {"access_token": "str"}, "notes": "Validates signature and max-age=30 d; regenerates access token only."},
+      {"path": "/auth/me", "method": "GET", "auth": "Bearer", "response_200": {"user": "dict"}, "notes": "Used by app after login to warm UI."},
+      {"path": "/predict", "method": "POST", "auth": "Bearer", "body": {"latitude": "float", "longitude": "float", "operator_name": "str", "network_type": "2G|3G|4G|5G", "frequency_mhz": "float?", "timestamp": "str?"}, "response_200": {"predicted_signal_power": "float dBm", "predicted_quality": "str", "deadzone_risk": "float 0..1", "deadzone_label": "low|medium|high", "confidence": "float 0..1", "reasons": "[str]", "model_source": "deadzone-model-v3", "model_variant": "Alfa::4G|Touch::4G|... "}, "notes": "Delegates to DeadzoneRuntime.predict(). v3 is active; v2 BallTree kNN is fallback."},
+      {"path": "/predict/batch", "method": "POST", "auth": "Bearer", "body": {"points": "[{lat,lon,operator,network_type,freq}]"}, "response_200": {"predictions": "[DeadzonePrediction]"}, "notes": "Uses build_feature_dataframe for one vectorised inference pass."},
+      {"path": "/api/cell/ingest", "method": "POST", "auth": "Bearer", "body": "CellDataRequest (see Android models)", "response_201": {"status": "ok", "id": "int"}, "notes": "Calls _validate_payload, _parse_timestamp, _store_cell_payload, _store_neighbor_cells, _emit_realtime_updates."},
+      {"path": "/api/cell/ingest/batch", "method": "POST", "auth": "Bearer", "body": {"items": "[CellDataRequest]"}, "response_201": {"accepted": "int", "rejected": "int", "errors": "[str]"}, "notes": "Offline-sync path; iterates and partially succeeds."},
+      {"path": "/api/stats/device", "method": "GET", "auth": "Bearer", "query": {"device_id": "str", "since": "ISO", "until": "ISO"}, "response_200": {"operator_percentages": "dict", "network_percentages": "dict", "avg_signal_power": "float", "avg_snr": "float", "handover_count": "int", "samples": "int"}, "notes": "Uses _accumulate_connectivity_time — duration-weighted not count-weighted."},
+      {"path": "/api/stats/fleet", "method": "GET", "auth": "Bearer", "response_200": {"active_devices": "int", "operator_share": "dict", "network_share": "dict", "avg_signal_power": "float"}, "notes": "'Active' means a sample within ACTIVE_DEVICE_MINUTES (5)."},
+      {"path": "/api/stats/central", "method": "GET", "auth": "Bearer", "response_200": {"alfa": "stats", "touch": "stats"}, "notes": "Per-operator rollup used by dashboard central panel."},
+      {"path": "/dashboard", "method": "GET", "html": "dashboard.html", "notes": "Renders live fleet view — subscribes over Socket.IO."},
+      {"path": "/api/dashboard-summary", "method": "GET", "response_200": {"active_devices": "int", "samples_last_hour": "int", "avg_signal_power": "float", "handovers_last_hour": "int", "top_operators": "[{name, share}]"}, "notes": "REST echo of the dashboard WebSocket event."},
+      {"path": "/device/overview", "method": "GET", "response_200": {"devices": "[DeviceLog+lastSeen]"}, "notes": "Enriched with vendor via device_identity."},
+      {"path": "/device/profile", "method": "GET", "query": {"device_id": "str"}, "html": "device_stats.html", "notes": "Per-device analytics page."},
+      {"path": "/api/history", "method": "GET", "auth": "Bearer", "query": {"device_id": "str?", "since": "ISO?", "until": "ISO?", "limit": "int?"}, "response_200": {"rows": "[CellData.to_dict]"}, "notes": "Paginated list for HistoryFragment."},
+      {"path": "/api/export.csv", "method": "GET", "auth": "Bearer", "response_200": "text/csv stream", "notes": "Streaming CSV of CellData rows; consumed by ExportHelper on the phone."},
+      {"path": "/api/handover-stats", "method": "GET", "auth": "Bearer", "response_200": {"handovers_per_hour": "[int]", "ping_pong_count": "int"}},
+      {"path": "/api/heatmap-data", "method": "GET", "query": {"grid": "int? default 100m", "limit": "int? default 1200", "operator": "str?", "network_type": "str?"}, "response_200": {"cells": "[{lat, lon, avg_signal_power, samples, deadzone_risk, deadzone_label, prediction_confidence, predicted_signal_power, risk_reasons}]"}, "notes": "_aggregate_heatmap_rows buckets by ~100m grid, then calls predict_deadzone for each bucket centroid — the tightest integration between the ingest DB and the ML model."},
+      {"path": "/api/tower-clusters", "method": "GET", "response_200": {"clusters": "[{id, lat, lon, operator, network_type, samples, avg_signal_power}]"}, "notes": "DBSCAN-like bucketing on cell_id+tac."},
+      {"path": "/api/tower-clusters/detail", "method": "GET", "query": {"cluster_id": "str"}, "response_200": {"cluster": "{...}", "recent_samples": "[CellData]", "neighbors": "[...]"}},
+      {"path": "/api/neighbor-cells", "method": "GET", "query": {"device_id": "str", "limit": "int?"}, "response_200": {"neighbors": "[NeighborCellData.to_dict]"}},
+      {"path": "/heatmap", "method": "GET", "html": "heatmap.html", "notes": "Leaflet page with risk overlay."},
+      {"path": "/api/speed-test/start", "method": "POST", "auth": "Bearer", "response_200": {"test_id": "str", "server_url": "str"}},
+      {"path": "/api/speed-test/complete", "method": "POST", "auth": "Bearer", "body": {"test_id": "str", "download_mbps": "float", "upload_mbps": "float", "ping_ms": "float"}, "response_201": {"id": "int"}},
+      {"path": "/api/speed-test/history", "method": "GET", "auth": "Bearer", "response_200": {"rows": "[SpeedTestResult.to_dict]"}},
+      {"path": "/api/diagnostics-summary", "method": "GET", "auth": "Bearer", "response_200": {"latency_ms": "float", "jitter_ms": "float", "packet_loss_pct": "float", "coverage_score": "float"}, "notes": "Fleet level — used by Diagnostics tab."},
+      {"path": "/api/diagnostics-history", "method": "GET", "auth": "Bearer", "query": {"bucket": "5m|1h"}, "response_200": {"series": "[{t, latency, jitter, loss, coverage}]"}},
+      {"path": "/api/report.pdf", "method": "GET", "auth": "Bearer", "response_200": "application/pdf stream", "notes": "Rendered via ReportLab."},
+      {"path": "/api/alert-rules", "methods": ["GET", "POST", "DELETE"], "response": "CRUD on AlertRule rows."},
+      {"cli": "retrain-model", "command": "flask retrain-model", "notes": "Click command registered on the app object; invokes deadzone_model.DeadzoneRuntime.train() which calls deadzone_training.train_dual_model and persists the joblib bundle to DEADZONE_MODEL_PATH."}
+    ],
+    "websocket_events": [
+      {"event": "new_cell_data", "payload": "CellData.to_dict()", "emit_trigger": "After each _store_cell_payload."},
+      {"event": "dashboard_summary", "payload": "Same shape as /api/dashboard-summary.", "emit_trigger": "Piggy-backs on new_cell_data."},
+      {"event": "signal_alert", "payload": "{device_id, rule_id, metric, value, threshold, message}", "emit_trigger": "When an AlertRule fires during ingestion."}
+    ],
+    "key_helpers": {
+      "_validate_payload": "Schema + range checks. Rejects cell_id < 0, signal_power > -30 or < -140, network_type not in set.",
+      "_parse_timestamp": "Tries '%d %b %Y %I:%M %p' first, then datetime.fromisoformat, then int(epoch_ms)/1000. Always returns timezone-aware Asia/Beirut.",
+      "_store_cell_payload": "Upserts DeviceLog (first_seen/last_seen), appends CellData. Runs in single transaction.",
+      "_store_neighbor_cells": "Deletes then re-inserts neighbours tied to the CellData row.",
+      "_emit_realtime_updates": "socketio.emit three events inside try/except so a WS failure never breaks ingest.",
+      "_base_query / _query_rows / _fetch_previous_rows": "Shared SQLAlchemy query builders respecting since/until/device/operator filters.",
+      "_accumulate_connectivity_time": "For each pair of consecutive samples on a device, accrues dwell time to the operator+network of the first sample — yields duration-weighted stats.",
+      "_build_stats_payload / _fetch_devices / _parse_limit / _parse_grid_size": "Response shapers.",
+      "_aggregate_heatmap_rows": "Grid bucketing (math.floor(lat/step)), then for each bucket centroid calls predict_deadzone() so each pixel carries both measured avg signal and predicted risk.",
+      "_build_tower_clusters": "Groups by (operator,network,cell_id,tac) and computes centroid + stats."
+    },
+    "device_identity": {
+      "file": "server/device_identity.py",
+      "contents": {
+        "OUI_TABLE": "Curated dict mapping first 3 MAC bytes (upper-case, no separators) to vendor name. Covers Apple, Samsung, Google, Xiaomi, Huawei, OnePlus, Oppo, Sony, Motorola, Nokia.",
+        "normalise_mac(mac)": "Strip non-hex, upper-case, return None if not 12 chars.",
+        "is_locally_administered(mac)": "Check bit 0x02 of second nibble — true for Android random MACs.",
+        "resolve_vendor(mac, fallback_manufacturer)": "Returns OUI lookup if non-random else fallback (Build.MANUFACTURER), else 'Unknown'.",
+        "resolve_device_label(device_log, user)": "Formats 'display_name (Vendor Model)' string for UI.",
+        "enrich_device_rows(rows)": "Map over a list of DeviceLog dicts attaching vendor_resolved + display_label fields."
+      }
+    },
+    "templates": {
+      "dashboard.html": "Bootstrap layout, Chart.js KPI cards, Socket.IO client subscribing to new_cell_data & dashboard_summary, live-updating charts.",
+      "device_stats.html": "Per-device tables + pie charts for operator/network share + timeline of handovers.",
+      "heatmap.html": "Leaflet map with grid overlay; colour scale tied to deadzone_risk; popup shows risk_reasons."
+    },
+    "tests": {
+      "conftest.py": "Prepends server/ to sys.path, builds Flask app with TestConfig, yields client fixture.",
+      "test_app.py": "End-to-end: register→login→ingest→stats→fleet→history→heatmap. Validates WebSocket emissions are fired (monkeypatches socketio.emit).",
+      "test_deadzone_features.py": "Asserts NUMERIC_FEATURES_V3 length is 38 and build_feature_row handles NaNs.",
+      "test_deadzone_model.py": "Trains a tiny v3 model on fixture data, round-trips joblib, asserts predict returns valid DeadzonePrediction.",
+      "test_deadzone_propagation.py": "COST-231 expected loss curve; FSPL sanity; EIRP defaults."
+    }
+  },
+
+  "android": {
+    "build": {
+      "compileSdk": 34,
+      "minSdk": 24,
+      "targetSdk": 34,
+      "language": "Java 17 source / 17 target",
+      "gradle": "8.x via Gradle wrapper",
+      "dependencies": ["Retrofit2 + OkHttp3 (logging interceptor BODY)", "Gson converter", "Room v2 (v4 schema)", "WorkManager", "AndroidX Navigation (Fragment)", "Material Components", "Google Play Services Maps + Location", "AndroidX Biometric", "MPAndroidChart", "Lottie"]
+    },
+    "manifest": {
+      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_WIFI_STATE", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "READ_PHONE_STATE", "READ_PHONE_NUMBERS", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION", "POST_NOTIFICATIONS", "WAKE_LOCK", "WRITE_EXTERNAL_STORAGE (maxSdk=28)", "USE_BIOMETRIC"],
+      "uses_feature": "android.hardware.telephony required=true",
+      "application_theme": "Theme.NetworkCellAnalyzer",
+      "network_security_config": "@xml/network_security_config — permits cleartext traffic to LAN dev server.",
+      "activities": [{"name": "SplashActivity", "intent_filter": "MAIN/LAUNCHER", "theme": "Splash"}, {"name": "LoginActivity", "windowSoftInputMode": "adjustResize"}, {"name": "MainActivity", "launchMode": "singleTop"}],
+      "services": [{"name": "CellMonitorService", "foregroundServiceType": "location"}],
+      "meta_data": {"com.google.android.geo.API_KEY": "${MAPS_API_KEY} — injected via gradle.properties / CI secret."}
+    },
+    "application_class": {
+      "file": "NetworkAnalyzerApp.java",
+      "responsibilities": [
+        "onCreate → NotificationHelper.createAllChannels(this) — creates SERVICE (low), ALERTS (high), HANDOVER (default) NotificationChannels.",
+        "Schedules OfflineSyncWorker via WorkManager (ExistingPeriodicWorkPolicy.KEEP, 15 min, NetworkType.CONNECTED).",
+        "Eagerly initialises PreferenceManager singleton."
+      ]
+    },
+    "activities": {
+      "SplashActivity": "Minimal themed activity; launches LoginActivity or MainActivity depending on PreferenceManager.hasAuthToken().",
+      "LoginActivity": {
+        "lines": 641,
+        "responsibilities": [
+          "Toggle Login/Register modes — validates email regex + password length ≥ 8.",
+          "Biometric unlock via androidx.biometric.BiometricPrompt when PREF_BIOMETRIC_ENABLED and stored credentials exist.",
+          "POST /auth/login or /auth/register; on 200 stores tokens via PreferenceManager and starts MainActivity.",
+          "Handles refresh_token flow when access token expired at app launch (AuthInterceptor also covers in-flight 401s)."
+        ]
+      },
+      "MainActivity": {
+        "lines": 334,
+        "responsibilities": [
+          "Sets up NavController (nav_graph.xml) with BottomNavigationView + DrawerLayout + AppBarConfiguration over 8 top-level destinations.",
+          "Requests runtime permissions (location fine/coarse/background, notifications 13+, phone state).",
+          "Starts CellMonitorService via startForegroundService() once permissions granted and PREF_MONITORING_ACTIVE=true.",
+          "Registers BroadcastReceiver for ACTION_CELL_DATA_UPDATED to allow fragments to react without polling.",
+          "Dark-mode toggle reads PREF_DARK_MODE and calls AppCompatDelegate.setDefaultNightMode()."
+        ]
+      }
+    },
+    "fragments": {
+      "DashboardFragment": "Shows current cell: operator, network type, cellId, signal + quality badge, SNR, location. Subscribes to broadcast and refreshes. Pulls /api/stats/device for the last-hour averages at bottom.",
+      "HeatmapFragment": {
+        "lines": 1462,
+        "responsibilities": "Google Maps SupportMapFragment. Fetches /api/heatmap-data, renders TileProvider with radial gradient per point, colour-coded by deadzone_risk. Toggle chips for operator (Alfa/Touch/All) and network_type (2G/3G/4G/5G/All). Long-press → /predict point query. Bottom sheet with risk_reasons. HUD cards for centroid stats."
+      },
+      "StatisticsFragment": "Pie/bar charts for operator_share and network_share over selectable window (1 h / 24 h / 7 d). Calls /api/stats/device.",
+      "HistoryFragment": "Paginated RecyclerView of CellData rows via HistoryAdapter. Export button streams /api/export.csv to Downloads via ExportHelper.",
+      "SpeedTestFragment": "Runs a download/upload against /api/speed-test/* endpoints using OkHttp raw stream; displays live throughput via progress bar; posts result to /api/speed-test/complete.",
+      "TowerClustersFragment": "Lists tower clusters from /api/tower-clusters. Tap → TowerClusterDetailFragment.",
+      "TowerClusterDetailFragment": "Detail page — recent samples + neighbours from /api/tower-clusters/detail.",
+      "DiagnosticsFragment": "Four KPI tiles (latency, jitter, packet loss, coverage) + sparkline from /api/diagnostics-history.",
+      "SettingsFragment": "Form bound to PreferenceManager — server URL, collection interval, dark mode, biometric, alert thresholds."
+    },
+    "services": {
+      "CellMonitorService": {
+        "lines": 354,
+        "responsibilities": [
+          "Foreground service with NOTIFICATION_SERVICE=1001 ongoing notification.",
+          "ScheduledExecutor polls every DEFAULT_COLLECTION_INTERVAL=10 s (configurable).",
+          "telephonyManager.getAllCellInfo() → CellInfoHelper.parseAll() → CellRecord list.",
+          "LocationManager.requestSingleUpdate(GPS_PROVIDER first else NETWORK_PROVIDER).",
+          "Persists record (synced=false) in CellDataDao.",
+          "POST /api/cell/ingest via Retrofit; on 201 set synced=true.",
+          "AdaptiveMonitoringEngine.adjust(record) — may shorten/extend interval based on variance/handovers.",
+          "HandoverDetector.detectPingPong() — if true, fires NOTIFICATION_HANDOVER=1003 via NotificationHelper.",
+          "Broadcasts ACTION_CELL_DATA_UPDATED (LocalBroadcastManager).",
+          "Honors STOP_MONITORING intent (notification action)."
+        ]
+      },
+      "OfflineSyncWorker": {
+        "lines": 195,
+        "responsibilities": [
+          "WorkManager CoroutineWorker (Java style). Periodic 15-minute floor, NetworkType.CONNECTED constraint.",
+          "Queries CellDataDao.getUnsynced(limit=200).",
+          "POST /api/cell/ingest/batch; on 201 marks rows synced.",
+          "Returns Result.retry() on IOException, Result.success() otherwise."
+        ]
+      }
+    },
+    "helpers": {
+      "CellInfoHelper": {
+        "lines": 391,
+        "functions": {
+          "parseAll(list)": "Iterates CellInfo list, dispatches to parseLte/parseWcdma/parseGsm/parseNr; picks registered cell as primary.",
+          "parseLte": "RSRP, RSSNR (÷10 per spec), TAC, CI, EARFCN.",
+          "parseWcdma": "dBm + Ec/No extracted via reflection on CellSignalStrengthWcdma (hidden getter).",
+          "parseGsm": "dBm only; snr = UNAVAILABLE (-999 sentinel).",
+          "parseNr": "Prefers SS-RSRP over CSI-RSRP; SS-SINR for snr; NRARFCN.",
+          "getSignalQuality(dBm)": "Thresholds: Excellent ≥-65, Good ≥-75, Fair ≥-85, Poor ≥-95, else NoSignal.",
+          "networkTypeFromCellInfo": "Maps CellInfo subtype to 2G/3G/4G/5G string."
+        }
+      },
+      "HandoverDetector": {
+        "lines": 227,
+        "fields": "Singleton, synchronized, MAX_HISTORY_SIZE=500.",
+        "functions": {
+          "recordSample(record)": "Pushes (cellId, ts) into deque.",
+          "detectPingPong()": "Counts distinct switches in last HANDOVER_WINDOW_MS=60000 ms; flags if ≥ PING_PONG_THRESHOLD=3.",
+          "getHandoverCount(windowMs)": "Returns switches in window — used by DashboardFragment."
+        }
+      }
+    },
+    "network": {
+      "ApiService": {
+        "lines": 153,
+        "endpoints_declared": ["@POST auth/login", "@POST auth/register", "@POST auth/refresh", "@POST api/cell/ingest", "@POST api/cell/ingest/batch", "@GET api/stats/device", "@GET api/stats/fleet", "@GET api/stats/central", "@GET api/history", "@Streaming @GET api/export.csv", "@GET api/heatmap-data", "@POST predict", "@POST predict/batch", "@GET api/tower-clusters", "@GET api/tower-clusters/detail", "@GET api/neighbor-cells", "@GET api/diagnostics-summary", "@GET api/diagnostics-history", "@POST api/speed-test/start", "@POST api/speed-test/complete", "@GET api/speed-test/history", "@Streaming @GET api/report.pdf"]
+      },
+      "AuthInterceptor": "OkHttp Interceptor — attaches Authorization: Bearer <access>. On 401 attempts /auth/refresh once, retries original request. On refresh failure, clears tokens and posts a local broadcast to force LoginActivity.",
+      "RetrofitClient": "Singleton. 30 s connect/read/write timeouts. TLS 1.2 ConnectionSpec. HttpLoggingInterceptor at Level.BODY in debug. Base URL read from SharedPreferences (default http://192.168.0.139:5000/). Exposes getInstance(context).",
+      "request_response_models": {
+        "AuthResponse": "access_token, refresh_token, user{id,email,display_name}",
+        "LoginRequest / RegisterRequest / RefreshRequest": "Payload POJOs for auth.",
+        "CellDataRequest": "Full ingestion payload — device_id, timestamp (ISO), operator_name, mcc/mnc, network_type, cell_id, tac, signal_power, signal_quality, snr, latitude/longitude/accuracy_m, band, frequency_mhz, channel_earfcn_nrarfcn, is_ping_pong, neighbors[{cell_id, pci, rsrp, rsrq, network_type}].",
+        "BatchCellDataRequest": "Wrapper {items:[CellDataRequest]} used by OfflineSyncWorker.",
+        "StatsResponse": "operator_percentages, network_percentages, avg_signal_power, avg_snr, handover_count, samples.",
+        "HistoryResponse": "rows:[CellDataRequest-like].",
+        "HeatmapResponse": "cells[{lat, lon, avg_signal_power, samples, deadzone_risk, deadzone_label, prediction_confidence, predicted_signal_power, risk_reasons}].",
+        "DeadzonePredictionResponse / DeadzoneBatchPredictionResponse": "Exactly mirrors /predict JSON above.",
+        "DiagnosticsResponse / DiagnosticsHistoryResponse": "KPI tiles + series.",
+        "TowerClustersResponse / TowerClusterDetailResponse": "Cluster list + single cluster detail.",
+        "SpeedTestRequest / GenericResponse": "Speed test completion + generic ack."
+      }
+    },
+    "database": {
+      "AppDatabase": "Room v4, entities: CellDataEntity, SpeedTestEntity. fallbackToDestructiveMigration(). Singleton.",
+      "CellDataEntity": "Mirrors CellDataRequest + synced:boolean + localId PK (autoincrement).",
+      "CellDataDao": {
+        "queries": [
+          "@Insert insertAll(list)",
+          "@Query getUnsynced(limit)",
+          "@Query getByDevice(deviceId, limit)",
+          "@Query markSynced(ids)",
+          "@Query getLatest() — used by DashboardFragment",
+          "@Query deleteOlderThan(threshold) — called from SettingsFragment purge."
+        ]
+      },
+      "SpeedTestEntity": "id, timestamp, download_mbps, upload_mbps, ping_ms, server_name, lat, lon.",
+      "SpeedTestDao": "Basic insert + getAll."
+    },
+    "utils": {
+      "Constants": "See server_side-canonical list — notification IDs, channel names, default interval (10 s), default server URL (http://192.168.0.139:5000/), SharedPreferences keys, network type strings, signal thresholds (-65/-75/-85/-95), intent actions, API endpoint paths, export dir, HANDOVER_WINDOW_MS=60000, PING_PONG_THRESHOLD=3, PREDICTION_WINDOW_SIZE=30.",
+      "PreferenceManager": "Typed wrapper around SharedPreferences PREFS_NAME=network_analyzer_prefs. Getters/setters for auth_token, refresh_token, user_email, user_name, device_id, guest_mode, collection_interval, monitoring_active, biometric_enabled, dark_mode, signal_threshold, alert_enabled, server_url.",
+      "NotificationHelper": "Creates 3 channels (SERVICE low, ALERTS high, HANDOVER default). Builds PendingIntents for MainActivity tap and STOP_MONITORING action.",
+      "NetworkInsightEngine": "Rolling window stats — avg/stdev signal_power, most common operator, handover-rate. Used by AdaptiveMonitoringEngine and DashboardFragment.",
+      "NetworkIdentityHelper": "Resolves operator_name from MCC/MNC + TelephonyManager (handles dual-SIM via SubscriptionManager). Maps Lebanon MCC 415: MNC 01 Alfa, MNC 03 Touch.",
+      "AdaptiveMonitoringEngine": "Short — decides new interval: shrinks to 5 s if signal variance high or handover seen; grows to 30 s if idle; clamped [5 s, 60 s].",
+      "ExportHelper": "Writes CSV/PDF stream from server to Downloads via MediaStore (API 29+) or legacy WRITE_EXTERNAL_STORAGE."
+    },
+    "adapters": {
+      "HistoryAdapter": "RecyclerView adapter — binds CellDataEntry to item_history.xml. Differ via DiffUtil for smooth pagination.",
+      "NeighborCellAdapter": "Binds NeighborCellData rows in cluster detail + dashboard expand panel."
+    },
+    "resources": {
+      "colors.xml": "Aurora palette — primary emerald #047857, dark #064E3B, light #34D399; secondary violet #7C3AED; tertiary rose #F43F5E; warm surfaces #FDFCF7/#FFFFFF/#F5F4F2; signal colours excellent=primary, good #65A30D, fair #D97706, poor #DC2626, noSignal #78716C; badges 2G #92400E / 3G #65A30D / 4G primary / 5G violet / Unknown stone.",
+      "colors_night": "Dark variants of the above with warm charcoal backgrounds.",
+      "navigation/nav_graph.xml": "startDestination=dashboardFragment. 9 fragments with actions. deepLink patterns for notification taps.",
+      "drawable/*": "bg_hero_panel, bg_soft_panel, bg_screen_gradient — gradients using heroSurfaceStart→heroSurfaceEnd. bg_auth_hero/eyebrow/monogram — new login panels.",
+      "mipmap-anydpi-v26/ic_launcher.xml": "Adaptive icon with ic_launcher_foreground/background + monochrome (Android 13+ themed icons).",
+      "xml/network_security_config.xml": "Allows cleartext on dev IPs for LAN testing."
+    }
+  },
+
+  "deadzone_model": {
+    "goal": "Predict RSRP (dBm) AND a deadzone probability at any (lat, lon, operator, network_type) in Lebanon, with human-readable SHAP reasons.",
+    "version": "v3 — deadzone-model-v3 (dual LightGBM, spatial-CV, Optuna-tuned, weak-supervised labels).",
+    "runtime_file": "server/deadzone_model.py (2031 lines)",
+    "runtime_class": "DeadzoneRuntime",
+    "public_api": {
+      "predict_deadzone(lat, lon, operator, network_type, frequency_mhz=None, timestamp=None) -> DeadzonePrediction": "Returns a DeadzonePrediction dataclass.",
+      "DeadzonePrediction fields": ["predicted_signal_power (dBm)", "predicted_quality (Excellent|Good|Fair|Poor|NoSignal)", "deadzone_risk (float 0..1)", "deadzone_label (low|medium|high)", "confidence (float 0..1 — from regressor quantile spread)", "reasons (list[str] from SHAP)", "model_source ('deadzone-model-v3')", "model_variant ('Alfa::4G' etc. or 'global')"]
+    },
+    "model_components": {
+      "regressor": "LightGBM regressor on log1p(-RSRP). log1p is for stabilising the dynamic range. Trained with MAE objective.",
+      "classifier": "LightGBM binary classifier → P(deadzone). Uses BCE/logloss.",
+      "ensemble_tie_in": "Fusion rule: if regressor predicts < -110 dBm, force deadzone_risk ≥ 0.7; if classifier > 0.6, lower signal floor by up to 15 dB."
+    },
+    "specialized_variants": {
+      "explanation": "For each operator × network_type with ≥ 300 training rows, a per-segment LightGBM is fitted (e.g. Alfa::4G, Touch::4G). At inference the most specific variant wins; falls back to 'global' if not available.",
+      "found_in_release": ["Alfa::4G", "Touch::4G", "global"]
+    },
+    "features": {
+      "file": "server/deadzone_features.py",
+      "NUMERIC_FEATURES_V3 (38)": "Includes: tower_distance_m, tower_count_within_500m, avg_tower_distance_m, min_tower_distance_m, elevation_m, terrain_slope, los_clearance_ratio, building_density_100m, building_height_p90_100m, road_class_score, is_highway, is_urban, is_suburban, is_rural, is_mountain, base_frequency_mhz, path_loss_cost231_db, path_loss_fsp_db, path_loss_itu_p1812_db, bullington_knife_edge_db, eirp_dbm_default, ookla_dl_mbps_p50, ookla_ul_mbps_p50, ookla_latency_ms_p50, ookla_dl_samples, app_samples_5km, app_rsrp_mean_5km, app_rsrp_p10_5km, app_handover_rate_5km, day_of_week, hour_of_day, is_weekend, h3_res7_pop_count, h3_res9_pop_count, osm_amenity_count_200m, osm_pop_density_proxy, is_near_water, weak_supervision_vote_avg (5 LF mean), p1812_minus_cost231 (leak-free residual).",
+      "CATEGORICAL_FEATURES_V3 (5)": "operator (Alfa|Touch|Other), network_type (2G|3G|4G|5G), h3_res7 (str), h3_res9 (str), urban_class (urban|suburban|rural|mountain).",
+      "FeatureContext dataclass": "Pre-computed lookup bundles: tower KDTree, DEM raster handle, building footprint rtree, H3 aggregate dict, Ookla raster, OSM cache.",
+      "build_feature_row / build_feature_dataframe": "Single-point and batch variants; share the same FeatureContext."
+    },
+    "propagation": {
+      "file": "server/deadzone_propagation.py",
+      "cost231_hata(d_km, freq_mhz, h_bs_m=30, h_ms_m=1.5, urban_class)": "Returns path loss dB.",
+      "fspl(d_km, freq_mhz)": "Free-space loss dB.",
+      "lebanon_defaults": {
+        "Alfa": {"2G": 900, "3G": 2100, "4G": 1800, "5G": 3500},
+        "Touch": {"2G": 900, "3G": 2100, "4G": 1800, "5G": 3500}
+      },
+      "eirp_defaults_dbm": {"macro_2G": 58, "macro_3G": 60, "macro_4G": 62, "macro_5G": 65},
+      "earfcn_to_freq": "LUT covering EU bands B1,B3,B7,B8,B20,B28,B38,B40 used by Lebanese operators."
+    },
+    "physics": {
+      "file": "server/deadzone_physics.py",
+      "itu_p1812_simplified(...)": "ITU-R P.1812 simplified — distance factor + terrain clutter factor + diffraction loss.",
+      "bullington(profile, freq_mhz)": "Walfisch–Bullington equivalent single knife-edge diffraction using SRTM profile sampled every ~30 m.",
+      "why_it_matters": "COST-231 alone was leaking: tower distance + cost231 path loss already determines RSRP, so a model learning this became AUC 0.998 but useless on new cities. P.1812 + Bullington adds terrain clutter the label can't trivially regenerate, so the learned signal is real."
+    },
+    "weak_supervision": {
+      "file": "server/deadzone_weak_supervision.py",
+      "approach": "Snorkel-style generative label model aggregating 5 Labeling Functions. Votes: DEAD=1, LIVE=0, ABSTAIN=-1.",
+      "labeling_functions": [
+        "LF_ookla_speed: DEAD if p50 DL < 1 Mbps at tile, LIVE if > 25 Mbps, else ABSTAIN.",
+        "LF_p1812_propagation: Using estimated path loss + eirp, if predicted RSRP < -110 dBm → DEAD; > -80 dBm → LIVE.",
+        "LF_tower_distance: No known tower of same operator within 3 km → DEAD; within 300 m with LOS → LIVE.",
+        "LF_terrain_obstructed: Bullington diffraction > 25 dB → DEAD.",
+        "LF_building_density: Extreme urban canyon with bldg density > 0.7 and tower > 1 km → DEAD."
+      ],
+      "generative_model": "Per-LF accuracy & correlation learned via majority-vote EM. Output = P(dead) used both as a feature AND as label in semi-supervised training."
+    },
+    "labels": {
+      "tiered_3gpp_rsrp_dbm": {"DEADZONE": -110, "POOR": -100, "FAIR": -90, "GOOD": -80},
+      "itu_speed_kbps": {"DEADZONE_DL": 1000, "GOOD_DL": 25000},
+      "combined_rule": "deadzone = 1 iff RSRP ≤ -110 OR Ookla p50 DL ≤ 1 Mbps OR weak-supervision vote ≥ 0.7."
+    },
+    "training": {
+      "file": "server/deadzone_training.py",
+      "cv_strategy": "Spatial GroupKFold — groups by H3 res 7 cell so near-duplicate points never share a fold. 5 folds.",
+      "hyperparameter_tuning": "Optuna TPE sampler, n_trials=80, objective = mean OOF ROC AUC − 0.2·std(AUC across folds) to penalise unstable configs.",
+      "train_dual_model(df, ctx)": "Splits into regressor X,y_rsrp and classifier X,y_dead. Fits both LightGBM heads. Produces: {regressor, classifier, variants: {Alfa::4G:..., Touch::4G:...}, feature_meta, metrics}.",
+      "evaluate_dual_model": "Computes ROC AUC, PR AUC, accuracy, precision, recall, F1, calibration (Brier), and regressor MAE/RMSE on OOF predictions.",
+      "assign_spatial_fold_groups": "Adds a fold_group column based on H3 res 7 (~5 km cells)."
+    },
+    "dataset_sources": {
+      "OpenCelliD_Lebanon": "Offline snapshot (cells.csv.gz for MCC 415) — tower coordinates, technology, estimated range.",
+      "OpenCelliD_Berlin": "server/opencellid_berlin_262.csv.gz used by deadzone_transfer for cross-city test.",
+      "Ookla_Open_Data": "Tile-level p50 dl/ul/latency for fixed+mobile (q4 most recent). Joined via H3 res 9.",
+      "OSM": "Buildings, roads, POIs within Lebanon bbox. Used for density & urban class features.",
+      "SRTM_DEM": "NASA 30m DEM — Lebanon tiles. Used by Bullington diffraction.",
+      "App_Measurements": "Aggregated CellData rows by h3 cell. Fused last in the pipeline so the model benefits from live fleet telemetry too.",
+      "Berlin_V2X": "Fraunhofer HHI Berlin V2X dataset (CC0) on HuggingFace — mounted by deadzone_transfer for zero-shot cross-city AUC."
+    },
+    "release_metrics_lebanon": {
+      "samples": 1720,
+      "positive_rate": 0.1767,
+      "operator_split": {"Alfa": 855, "Touch": 865},
+      "network_split": {"2G": 101, "3G": 441, "4G": 1178},
+      "classifier": {"accuracy": 0.9506, "roc_auc": 0.9924, "pr_auc": 0.9660, "precision": 0.7778, "recall": 1.0},
+      "regressor": {"mae_db": 4.3, "rmse_db": 5.9, "coverage_of_p90_interval": 0.89}
+    },
+    "berlin_transfer_validation": {
+      "file": "server/deadzone_transfer.py",
+      "result": "Zero-shot ROC AUC on Berlin V2X ≈ 0.88 — demonstrates features are not Lebanon-over-fit once the COST-231 leak is removed."
+    },
+    "sionna_rt_optional": {
+      "file": "server/deadzone_sionna.py",
+      "purpose": "GPU-accelerated ray tracing (NVIDIA Sionna RT) to generate a dense simulated RSRP prior over an urban tile. Used as an optional sample-augmentation / ensemble partner. Requires CUDA — gracefully skipped otherwise."
+    },
+    "explainability": {
+      "file": "server/deadzone_explain.py",
+      "mechanism": "SHAP TreeExplainer on the classifier. Top-3 |SHAP| features per prediction are mapped through REASON_TEMPLATES to readable reasons.",
+      "example_templates": {
+        "tower_distance_m": "Nearest known {operator} tower is {value:.1f} m away",
+        "bullington_knife_edge_db": "Terrain blocks line-of-sight by ~{value:.0f} dB",
+        "path_loss_itu_p1812_db": "ITU-R P.1812 path loss reaches {value:.0f} dB",
+        "is_mountain": "Mountainous terrain class",
+        "building_density_100m": "Urban canyon — building density {value:.0%} within 100 m",
+        "ookla_dl_mbps_p50": "Crowd-sourced median DL in this tile is only {value:.1f} Mbps"
+      }
+    }
+  },
+
+  "documentation": {
+    "server/API_CONTRACT.md": "Canonical REST contract — request/response JSON for every endpoint, TZ/timestamp rules.",
+    "server/DEADZONE_MODEL.md": "How to (re)train, dataset fusion, metrics, leakage story (cost231 vs P.1812), Lebanon-specific variants.",
+    "server/README.md": "Server quickstart: venv, pip, flask init-db, flask run, flask retrain-model, dev vs prod config.",
+    "ANDROID_WIRELESS_DEBUG_SETUP.txt": "Step-by-step for enabling Developer Mode + Wireless Debugging, pairing over adb, installing the APK via Gradle.",
+    "README.md": "Currently marked deleted in git status — replaced by in-repo contract + module-level docs."
+  },
+
+  "figures": {
+    "android/": "App screenshots (login, dashboard, heatmap with risk overlay, history, speed test, settings).",
+    "server/": "Dashboard KPI strip, fleet aggregate charts, heatmap top-down view, device profile page.",
+    "dbpics/": "ER diagram + SQLite table screenshots for CellData, NeighborCellData, DeviceLog, User.",
+    "modelpics/": "Feature importance bar plot, ROC curve, PR curve, confusion matrix, calibration plot, SHAP summary, Berlin transfer comparison."
+  },
+
+  "tests": {
+    "server": ["test_app.py (end-to-end Flask client)", "test_deadzone_features.py", "test_deadzone_model.py", "test_deadzone_propagation.py"],
+    "android": "None in tree (manual testing via adb install)."
+  },
+
+  "security_and_gotchas": {
+    "token_storage": "Access + refresh tokens live in SharedPreferences — acceptable for coursework, NOT production (would use EncryptedSharedPreferences / Keystore).",
+    "cleartext_http": "network_security_config allows cleartext on LAN IPs only (dev). Prod would enforce HTTPS.",
+    "maps_api_key": "Injected via gradle.properties MAPS_API_KEY — never commit real keys.",
+    "label_leakage_trap": "Early versions reached AUC 0.998 because COST-231 path loss was both a feature and the foundation for the DEADZONE label. Fixed by switching labels to tiered-3GPP+Ookla+weak supervision, and adding P.1812/Bullington features that label rules don't see.",
+    "timestamp_format_gotcha": "Server accepts '%d %b %Y %I:%M %p' first — Android sends ISO; make sure LoginActivity's time display does NOT override the locale to a form the server can't parse.",
+    "random_mac_note": "Modern Android randomises MAC per SSID, so mac_address is locally-administered ~95% of the time. device_identity.is_locally_administered catches this and falls back to TelephonyManager Build.MANUFACTURER."
+  },
+
+  "presentation": {
+    "total_time_target_minutes": 15,
+    "members": {
+      "M1": {
+        "role": "Intro + System Architecture + closing integration demo",
+        "time_minutes": 3,
+        "talking_points": [
+          "What is a 'dead zone' and why it matters for Lebanese users (Alfa/Touch coverage gaps in mountainous terrain).",
+          "Show end-to-end diagram: Phone → HTTP + WebSocket → Flask + SQLAlchemy → LightGBM dual model → Dashboard/Heatmap.",
+          "Explain why we chose native Android (TelephonyManager APIs) + Flask + LightGBM (explainability via SHAP).",
+          "Close with the 60-second live integration demo: open the app, see a sample fly to the dashboard in real time, open heatmap and see the deadzone risk colour for a location."
+        ],
+        "json_paths_to_study": ["project", "system_architecture", "documentation", "presentation", "figures", "security_and_gotchas"]
+      },
+      "M2": {
+        "role": "Android app demo + deep-dive",
+        "time_minutes": 4,
+        "talking_points": [
+          "Permissions + foreground service model (why location type; POST_NOTIFICATIONS for 13+).",
+          "CellMonitorService polling loop: TelephonyManager.getAllCellInfo → CellInfoHelper (tech-specific parse) → Room insert (synced=false) → Retrofit POST → mark synced.",
+          "Offline resilience: OfflineSyncWorker periodic 15-min batch flush with NetworkType.CONNECTED constraint.",
+          "Handover detection: singleton HandoverDetector, 60-second window, ≥3 swaps = ping-pong notification.",
+          "Heatmap fragment rendering Google Maps + TileProvider coloured by deadzone_risk.",
+          "Hand-off: end by showing a payload leave the phone → say 'M3 picks up the moment that HTTP request hits the server'."
+        ],
+        "json_paths_to_study": ["android", "system_architecture.flow_end_to_end", "server.endpoints (focus on /api/cell/ingest + /api/heatmap-data)"]
+      },
+      "M3": {
+        "role": "Server + database + realtime deep-dive",
+        "time_minutes": 4,
+        "talking_points": [
+          "Flask app factory, config overrides (SQLite dev, Postgres prod), JWT via itsdangerous.",
+          "SQLAlchemy models: CellData + NeighborCellData cascade; DeviceLog identity row; AlertRule CRUD.",
+          "Ingest path: _validate_payload → _parse_timestamp (3 formats) → _store_cell_payload → _store_neighbor_cells → _emit_realtime_updates (new_cell_data, dashboard_summary, signal_alert).",
+          "Stats path: _accumulate_connectivity_time (duration-weighted, not count-weighted).",
+          "Heatmap path: _aggregate_heatmap_rows grid-buckets samples and calls predict_deadzone for each cell → model powers the UI, not just a separate endpoint.",
+          "Realtime: WebSocket client running inside dashboard.html; signal_alert triggers browser toast.",
+          "Hand-off: end with 'and the ML call we just made — that goes to M4'."
+        ],
+        "json_paths_to_study": ["server", "system_architecture", "deadzone_model.public_api"]
+      },
+      "M4": {
+        "role": "Dead-zone model + the 'extra part'",
+        "time_minutes": 4,
+        "talking_points": [
+          "Problem framing: predict RSRP + P(dead) + human reasons at any (lat,lon,operator,tech) in Lebanon.",
+          "Dataset fusion: OpenCelliD + Ookla + OSM + SRTM DEM + live app data. Weak supervision with 5 LFs via Snorkel.",
+          "Label leakage story: first model reached AUC 0.998 because COST-231 and label were circular. Fix: tiered 3GPP/ITU labels + P.1812/Bullington features + spatial GroupKFold CV so near-duplicates don't cross folds.",
+          "Model architecture: dual LightGBM (regressor on log1p(-RSRP), classifier on P(dead)). Optuna 80 trials, penalises fold-instability.",
+          "Specialized variants Alfa::4G / Touch::4G — leverage per-operator frequency defaults.",
+          "Lebanon metrics: AUC 0.9924, recall 1.0, precision 0.7778, regressor MAE 4.3 dB.",
+          "Generalisation: Berlin V2X zero-shot AUC ≈ 0.88 — validates the leak fix.",
+          "Extra part — EXPLAINABILITY: SHAP TreeExplainer → REASON_TEMPLATES → the 'Terrain blocks line-of-sight by ~28 dB' strings the user sees in the heatmap popup. Why this matters: a model saying '0.9 risk' is useless to a field engineer; a model saying 'tower 2.4 km away + 28 dB diffraction + Ookla tile only 0.8 Mbps' is actionable."
+        ],
+        "json_paths_to_study": ["deadzone_model", "security_and_gotchas.label_leakage_trap", "server.endpoints (/predict + /predict/batch)", "figures.modelpics"]
+      }
+    },
+    "handoff_choreography": [
+      "M1 ends by opening the live app on the presenter phone and handing to M2.",
+      "M2 ends by pointing at the HTTP log showing the POST /api/cell/ingest and handing to M3.",
+      "M3 ends by highlighting the subsequent call into predict_deadzone() and handing to M4.",
+      "M4 closes with the SHAP reason strings appearing in the dashboard heatmap popup — the loop is complete."
+    ]
+  }
+}
